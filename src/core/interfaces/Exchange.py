@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Optional
 
 from core.interfaces import CoinDict, Coins
 from core.models import Coin
@@ -32,3 +33,7 @@ class Exchange(ABC):
     async def sell(self, coin: Coin, amount: float) -> None: ...
     @abstractmethod
     async def buy(self, coin: Coin, amount: float) -> None: ...
+    
+    # Courier
+    @abstractmethod
+    async def withdraw(self, coin: Coin, amount: float, address: str, tag: Optional[str] = None, params: dict = {}) -> None: ...
