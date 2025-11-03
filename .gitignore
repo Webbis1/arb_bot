@@ -1,5 +1,1 @@
-# Ignore environment variables
 .env
-# Ignore specific Python file
-src.core.interfaces.Dto.CoinList.py
-src/core/interfaces/Dto/CoinList.py

@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from core.models import Exchange
+from core.interfaces import Exchange
 
 class ExFactory(ABC):
     @abstractmethod

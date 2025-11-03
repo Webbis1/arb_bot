@@ -14,6 +14,7 @@ class Exchange(ABC):
     async def get_current_coins(self) -> Coins: ...
     
     
+    
     # Price observer
     @abstractmethod
     async def subscribe_price(self, coin: Coin, sub: PriceSubscriber): ...
