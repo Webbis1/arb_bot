@@ -1,0 +1,4 @@
+# Ignore environment variables
+.env
+# Ignore specific Python file
+.core.interfaces.Dto.CoinList.py
