@@ -10,6 +10,8 @@ from core.models import Coin
 # подготовить отчетность по выполненным операциям
 
 
+import unittest
+
 class ExchangeFake(Exchange):
     def __init__(self, ex: Exchange) -> None:
         self._ex = ex

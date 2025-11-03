@@ -1,4 +1,5 @@
 from typing import TypeAlias
+from frozendict import frozendict
 
 from core.models import Coin
 from core.interfaces import Exchange
@@ -16,6 +17,6 @@ Destination: TypeAlias = Exchange
 """Биржа назначения"""
 
 
-TransferCommission: TypeAlias = dict[Coin, dict[Departure, dict[Destination, float]]]
-SellCommission: TypeAlias = dict[Coin, dict[Exchange, float]]
-BuyCommission: TypeAlias = dict[Coin, dict[Exchange, float]]
+TransferCommission: TypeAlias = frozendict[Coin, frozendict[Departure, frozendict[Destination, float]]]
+SellCommission: TypeAlias = frozendict[Coin, frozendict[Exchange, float]]
+BuyCommission: TypeAlias = frozendict[Coin, frozendict[Exchange, float]]
