@@ -2,10 +2,10 @@ from abc import ABC, abstractmethod
 from typing import Optional
 
 from core.interfaces import CoinDict, Coins
-from core.models import Coin
+from core.models import Coin, Exchange as ExchangeModel
 from core.protocols import BalanceSubscriber, PriceSubscriber
 
-class Exchange(ABC):
+class Exchange(ABC, ExchangeModel):
     @abstractmethod
     async def connect(self) -> None: ...
     @abstractmethod
@@ -17,9 +17,9 @@ class Exchange(ABC):
     
     # Price observer
     @abstractmethod
-    async def subscribe_price(self, coin: Coin, sub: PriceSubscriber): ...
+    async def subscribe_price(self, sub: PriceSubscriber): ...
     @abstractmethod
-    async def unsubscribe_price(self, coin: Coin, sub: PriceSubscriber): ...
+    async def unsubscribe_price(self, sub: PriceSubscriber): ...
     
     # Balance observer
     @abstractmethod

@@ -1,17 +1,18 @@
 from abc import ABC, abstractmethod
 from sortedcollections import ValueSortedDict
 from dataclasses import dataclass, field
+from typing import cast
 
 import asyncio
 import logging
 
-from core.models import Coin, Deal, TransferCommission, SellCommission, BuyCommission, Departure, Destination
-from core.interfaces import Exchange, ExchangeDict, All_prices
+from core.models import Coin, Deal
+from core.interfaces import Exchange, ExchangeDict, All_prices, Departure, Destination, SellCommission, BuyCommission
+from core.protocols import PriceSubscriber
 
 @dataclass
 class Analyst:
     exchenges: ExchangeDict
-    transfer_commission: TransferCommission
     sell_commissions: SellCommission  
     buy_commissions: BuyCommission
     threshold: float = 0.002
@@ -20,9 +21,31 @@ class Analyst:
     coin_locks: dict[Coin, asyncio.Lock] = field(default_factory=dict)
     logger: logging.Logger = field(default_factory=lambda: logging.getLogger('analyst'))
     
+
+
     def __post_init__(self):
-        self.sorted_coin: ValueSortedDict = ValueSortedDict(lambda value: value[2])  # type: ignore
+        self.sorted_coin = cast(
+            ValueSortedDict[Coin, tuple[Departure, Destination, float]], # type: ignore
+            ValueSortedDict(lambda value: value[2])
+        ) 
+        
     
+    
+  
+    async def get_best_deal(self) -> Deal:
+        best_coin: Coin
+        best_coin, exchanges_data = self.sorted_coin.peekitem(-1) # type: ignore
+        buy_exchange: Departure = exchanges_data[0]
+        sell_exchange: Destination = exchanges_data[1] 
+        best_benefit: float = exchanges_data[2]
+        
+        deal = Deal(
+            coin=best_coin,
+            departure=buy_exchange,
+            destination=sell_exchange,
+            benefit=best_benefit
+        )
+        return deal
     
     @abstractmethod
     async def start_analysis(self, exchange: Exchange, coin: Coin) -> None: ...
@@ -30,32 +53,42 @@ class Analyst:
     @abstractmethod
     async def stop_analysis(self, exchange: Exchange, coin: Coin) -> None: ...
     
-    @abstractmethod
-    async def get_all_prices(self) -> All_prices: ...
     
-    @abstractmethod
-    async def get_best_deal(self) -> Deal: ...
+
+    async def get_all_prices(self) -> All_prices:
+        all_prices: All_prices = {}
+        for coin, exchange_prices in self.coin_list.items():
+            for exchange, price in exchange_prices.items():
+                if exchange not in all_prices:
+                    all_prices[exchange] = {}
+                all_prices[exchange][coin] = price
+        return all_prices
     
-    async def start_update(self):
+    async def start(self):
         self.logger.info("Starting data collection")
         
-        await self.scout.start_monitoring()
+        for _, exchange in self.exchenges.items():
+            @dataclass
+            class Subscriber(PriceSubscriber):
+                analyst: Analyst
+                exchange: Exchange
+                
+                async def on_price_update(self, coin: Coin, value: float) -> None:
+                    if coin not in self.analyst.coin_list:
+                        self.analyst.coin_list[coin] = {}
+                        self.analyst.coin_locks[coin] = asyncio.Lock()
+                    
+                    self.analyst.coin_list[coin][self.exchange] = value
+                    
+                    try:
+                        self.analyst.sorted_coin[coin] = await self.analyst._coin_culc(coin) # TODO: может быть None
+                    except Exception as e:
+                        self.analyst.logger.error(f"Error recalculating {coin.name}: {e}")
+            
+            await exchange.subscribe_price(Subscriber(self, exchange))
+        
         self.logger.info("Monitoring started")
         
-        update_count = 0
-        async for update_coin in self.scout.coin_update():
-            update_count += 1
-            exchange: Exchange = update_coin[0]
-            coin: Coin = update_coin[1].currency
-            new_price: float = update_coin[1].amount
-            
-            self.coin_list[coin][exchange] = new_price
-            
-            try:
-                self.sorted_coin[coin] = await self._coin_culc(coin)
-            except Exception as e:
-                self.logger.error(f"Error recalculating {coin.name}: {e}")
-    
     async def _coin_culc(self, coin: Coin) -> tuple[Departure, Destination | None, float]:
         async with self.coin_locks[coin]:
             buy_exchange: Departure = self.__find_min_element_for_coin(coin)
