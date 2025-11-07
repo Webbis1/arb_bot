@@ -7,7 +7,5 @@ from core.models import Coin
 class Trade:
     buy_coin: Coin
     sell_coin: Coin
-    price: float
-    destination: Destination | None = field(default=None)
 
     

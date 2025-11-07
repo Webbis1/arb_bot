@@ -3,7 +3,12 @@ from frozendict import frozendict
 
 from core.models import Coin
 from core.interfaces import Exchange
+from .Trade import Trade
+from .Transfer import Transfer
+from .Wait import Wait
 
+
+Recommendation: TypeAlias = Trade | Transfer | Wait
 Coins = set[Coin]
 CoinDict = dict[Coin, float]
 ExchangeDict = dict[str, Exchange]
@@ -17,6 +22,6 @@ Destination: TypeAlias = Exchange
 """Биржа назначения"""
 
 
-TransferCommission: TypeAlias = frozendict[Coin, frozendict[Departure, frozendict[Destination, float]]]
-SellCommission: TypeAlias = frozendict[Coin, frozendict[Exchange, float]]
-BuyCommission: TypeAlias = frozendict[Coin, frozendict[Exchange, float]]
+TransferCommission: TypeAlias = dict[Coin, dict[Departure, dict[Destination, float]]]
+SellCommission: TypeAlias = dict[Coin, dict[Exchange, float]]
+BuyCommission: TypeAlias = dict[Coin, dict[Exchange, float]]

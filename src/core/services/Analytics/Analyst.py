@@ -3,38 +3,66 @@ from sortedcollections import ValueSortedDict
 from dataclasses import dataclass, field
 
 from frozendict import frozendict
+# from asyncio import Queue
+from asyncio import Condition
 
 import asyncio
 import logging
 
+
+from core.interfaces.Dto import Recommendation, Trade, Transfer, Wait
 from core.models import Coin, Deal, CoinPair
 from core.interfaces import Exchange, ExchangeDict, All_prices, Departure, Destination, SellCommission, BuyCommission
 from core.protocols import AnalistSubscriber, PriceSubscriber
 
-@dataclass
+# @dataclass
 class Analyst:
-    exchenges: ExchangeDict = field()
+    # exchenges: ExchangeDict = field()
     """ dict[str, Exchange]"""
-    _coin_pair: CoinPair = field()
+    # _coin_pair: CoinPair = field()
     """ bidict[int, Coin] """
-    sell_commissions: SellCommission = field()
+    # sell_commissions: SellCommission = field()
     """ frozendict[Coin, frozendict[Exchange, float]]"""
-    buy_commissions: BuyCommission = field()
-    """ frozendict[Coin, frozendict[Exchange, float]]"""
-    _threshold: float = field(default=0.002)
+    # buy_commissions: BuyCommission = field()
+    """ dict[Coin, dict[Exchange, float]]"""
+    # _threshold: float = field(default=0.002)
     
-    _coin_list: dict[Coin, dict[Exchange, float]] = field(default_factory=dict)
-    _coin_locks: dict[Coin, asyncio.Lock] = field(default_factory=dict)
+    # _coin_list: dict[Coin, dict[Exchange, float]] = field(default_factory=dict)
+    # _coin_locks: dict[Coin, asyncio.Lock] = field(default_factory=dict)
     
-    logger: logging.Logger = field(default_factory=lambda: logging.getLogger('analyst'))
+    # logger: logging.Logger = field(default_factory=lambda: logging.getLogger('analyst'))
+    
+    def __init__(self, exchenges: ExchangeDict, coin_pair: CoinPair, sell_commissions: SellCommission, buy_commissions: BuyCommission, threshold: float = 0.002) -> None:
+        self.exchenges = frozendict(exchenges)
+        self._coin_pair = frozendict(coin_pair)
+        self.sell_commissions = frozendict(sell_commissions)
+        self.buy_commissions = frozendict(buy_commissions)
+        self.threshold = threshold
+        self._coin_locks: dict[Coin, asyncio.Lock] = {}
+        self._coin_list: dict[Coin, dict[Exchange, float]] = {}
+        self.logger = logging.getLogger('analyst')
+        self.usdt_subscribers: set[AnalistSubscriber] = set()
+        self.other_subscribers: set[AnalistSubscriber] = set()
+        self.__post_init__()
+        self._usdt_lock = asyncio.Lock()
+        self._other_lock = asyncio.Lock()
+        
+        self._usdt_condition = Condition()
+        self._other_condition = Condition()
+        
+        
+        for coin in set(coin_pair.values()):
+            if coin.name == "USDT":
+                self.USDT: Coin = coin
+        
     
     @property
-    def coin_pair(self) -> CoinPair:
+    def coin_pair(self):
         return self._coin_pair
     
-    @property
-    def threshold(self) -> float:
-        return self._threshold
+    # @property
+    # def threshold(self) -> float:
+    #     return self._threshold
     
     @property
     def coin_locks(self) -> dict[Coin, asyncio.Lock]:
@@ -102,7 +130,25 @@ class Analyst:
     
     
 
-
+    async def get_all_benefits(self, buy_exchange: Exchange, coin: Coin) -> Deal | None:
+        deal: Deal = Deal(
+            coin=coin,
+            departure=buy_exchange,
+            destination=buy_exchange,
+            benefit=-float('inf')
+        )
+        
+        for exchange in self.coin_list[coin]:
+            if exchange == buy_exchange: continue
+            benefit = self.__benefit(buy_exchange, exchange, coin)
+            if benefit is not None and benefit >= deal.benefit:
+                deal.destination = exchange
+                deal.benefit = benefit
+                
+        if deal.benefit == -float('inf'):
+            self.logger.error(f"Could not find any valid benefit for coin {coin} from exchange {buy_exchange}")
+            return None
+        return deal
 
     async def get_best_deal(self) -> Deal | None:
         best_coin: Coin
@@ -122,15 +168,7 @@ class Analyst:
             destination=sell_exchange,
             benefit=best_benefit
         )
-        return deal
-    
-    @abstractmethod
-    async def start_analysis(self, sub: AnalistSubscriber, coin: Coin) -> None: ...
-    
-    @abstractmethod
-    async def stop_analysis(self, sub: AnalistSubscriber, coin: Coin) -> None: ...
-    
-    
+        return deal 
 
     async def get_all_prices(self) -> All_prices:
         all_prices: All_prices = {}
@@ -150,13 +188,14 @@ class Analyst:
                 analyst: Analyst
                 exchange: Exchange
                 
-                async def on_price_update(self, coin: Coin, value: float) -> None:
+                async def on_price_update(self, coin_id: int, value: float) -> None:
                     if coin in self.analyst.coin_list and isinstance(value, float) and value > 0:
                         async with self.analyst.coin_locks[coin]:
                             self.analyst._coin_list[coin][self.exchange] = value
                             
                             try:
                                 benefit = await self.analyst._coin_culc(coin)
+                                
                                 if benefit is not None:
                                     self.analyst.sorted_coin[coin] = benefit
                             except Exception as e:

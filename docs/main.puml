@@ -1,0 +1,111 @@
+@startuml arb_bot
+
+skinparam backgroundcolor AntiqueWhite|Blue
+
+class Exchange {
+  -id: int
+  +name: str
+  +api_key: str
+  +secret_key: str
+  +subscribe_to_price_update(subscriber: PriceSubscriber)
+  -async __price_notify(coin: str, value: float)
+  +get_balance(coin: str): float
+  +get_order_book(coin: str): dict
+  +execute_trade(deal: Deal): bool
+}
+
+class ExchangeFactory {
+  +exchanges: list[Exchange]
+  +get_exchange(name: str): Exchange
+  +register_exchange(exchange: Exchange)
+  +get_all_exchanges(): list[Exchange]
+}
+
+class Analyst {
+  -id: int
+  -exchanges: list[Exchange]
+  +name: str
+  +start()
+  +async update_price(coin: str, value: float)
+  +get_all_benefits(buy_exchange: Exchange, coin: str): Deal | None
+  +async get_best_deal(): Deal | None
+  -calculate_spread(buy_price: float, sell_price: float): float
+  -calculate_profit(deal: Deal): float
+}
+
+class Brain {
+  +analyst: Analyst
+  +async analyse(exchange: Exchange, asset: str): Recommendation
+  -async __usdt_analyse(exchange: Exchange, asset: str): Recommendation
+  -async __other_analyse(exchange: Exchange, asset: str): Recommendation
+  +make_decision(deal: Deal): bool
+}
+
+class Deal {
+  +buy_exchange: Exchange
+  +sell_exchange: Exchange
+  +coin: str
+  +buy_price: float
+  +sell_price: float
+  +amount: float
+  +potential_profit: float
+  +timestamp: datetime
+}
+
+class Recommendation {
+  +action: str
+  +confidence: float
+  +reason: str
+  +timestamp: datetime
+}
+
+class Coin {
+  +symbol: str
+  +name: str
+  +current_price: float
+  +volume_24h: float
+}
+
+' Composition relationships
+Brain *-- Analyst : содержит
+Analyst o-- ExchangeFactory : использует
+Analyst *-- "0..*" Exchange : анализирует
+ExchangeFactory *-- "1..*" Exchange : создает и управляет
+
+' Association relationships
+Brain --> Deal : генерирует
+Brain --> Recommendation : производит
+Analyst --> Deal : находит
+Exchange --> Coin : торгует
+
+' Method call relationships
+Exchange::subscribe_to_price_update ..> Analyst::update_price : уведомляет
+Analyst::get_best_deal <.. Brain::__usdt_analyse : запрашивает
+Analyst::get_all_benefits <.. Brain::__other_analyse : запрашивает
+
+Brain::analyse -left-> Brain::__usdt_analyse : вызывает
+Brain::analyse -right-> Brain::__other_analyse : вызывает
+
+' Data flow
+Deal ..> Brain::make_decision : передается для решения
+Recommendation ..> Brain::make_decision : влияет на
+
+note right of Exchange
+  Отправляет уведомления о
+  изменении цен всем подписчикам
+  через __price_notify
+end note
+
+note left of Analyst
+  Анализирует арбитражные возможности
+  между различными биржами
+  в реальном времени
+end note
+
+note bottom of Brain
+  Принимает окончательное решение
+  о совершении сделки на основе
+  рекомендаций аналитика
+end note
+
+@enduml

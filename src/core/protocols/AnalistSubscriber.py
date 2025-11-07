@@ -1,10 +1,11 @@
 from typing import Protocol
 
-from core.interfaces.Dto.Trade import Trade
-from core.interfaces.Dto.Transfer import Transfer
-from core.models import Coin, Exchange
+from core.interfaces import Exchange
+from core.interfaces.Dto import Recommendation
+
 
 
 class AnalistSubscriber(Protocol):
-        async def update_solution(self, dto: Trade | Transfer) -> None: ...
+        running: bool
+        async def update_solution(self, dto: Recommendation) -> None: ...
         def get_exchange(self) -> Exchange: ...

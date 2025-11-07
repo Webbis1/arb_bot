@@ -8,5 +8,4 @@ class Transfer:
     coin: Coin
     departure: Departure
     destination: Destination
-    amount: float
     
