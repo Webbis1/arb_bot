@@ -6,6 +6,8 @@ from core.interfaces import Exchange
 from core.interfaces.Dto import CoinDict, Coins
 from core.models import Coin
 from core.protocols import BalanceSubscriber, PriceSubscriber
+from core.models.types import *
+
 
 import asyncio
 from asyncio import Condition
@@ -24,10 +26,10 @@ class CcxtExchange(Exchange):
         self.__api_secret = api_secret
         self.__password = kwargs.get('password', '')
         self.__ex: ccxtpro.Exchange 
-        self.wallet: dict[int, float] = {}
+        self.wallet: dict[coin_id, amount] = {}
         # self.coin_pairs: bidict[str, int] = bidict()
         
-        self.coins: bidict[str, int] = bidict()
+        # self.coins: bidict[str, int] = bidict()
         self.balance_sudscribers: set[BalanceSubscriber] = set()
         self.price_subscribers: set[PriceSubscriber] = set()
         self._is_running = False
@@ -106,7 +108,7 @@ class CcxtExchange(Exchange):
             print(f"Ошибка при проверке торговых пар: {e}")
             return False, None
     
-    async def start(self, coins: bidict[str, int]) -> None:
+    async def start(self, coins: bidict[coin_name, coin_id]) -> None:
         if self._is_running: return
         
         
@@ -118,10 +120,10 @@ class CcxtExchange(Exchange):
         
         asyncio.create_task(self.watch_tickers(list(coins.keys())))
     
-    def _get_symbols(self, coin_names: list[str]) -> list[str]:
+    def _get_symbols(self, coin_names: list[coin_name]) -> list[str]:
         return [f"{coin_name}/USDT" for coin_name in coin_names]
     
-    async def watch_tickers(self, coin_names: list[str]) -> None:
+    async def watch_tickers(self, coin_names: list[coin_name]) -> None:
         self._is_running = True
         try:
             self.logger.info(f"Starting Price monitoring for {self.name}...")
@@ -134,7 +136,7 @@ class CcxtExchange(Exchange):
                     for symbol, ticker in tickers.items():
                         coin_name = symbol.split('/')[0]
                         price = ticker['last']
-                        asyncio.create_task(self._price_notify(self.coins[coin_name], price))
+                        await self._price_notify(self.coins[coin_name], price)
                     
                 except asyncio.CancelledError:
                     self.logger.info(f"Observation cancelled for {self.__ex.id}")
@@ -208,7 +210,7 @@ class CcxtExchange(Exchange):
     async def unsubscribe_balance(self, sub: BalanceSubscriber):
         self.balance_sudscribers.discard(sub)
     
-    async def get_balance(self) -> CoinDict:
+    async def get_balance(self) -> dict[coin_id, amount]:
         return self.wallet
     
     #Trader

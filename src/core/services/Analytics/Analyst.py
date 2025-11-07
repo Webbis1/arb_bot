@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from frozendict import frozendict
 # from asyncio import Queue
 from asyncio import Condition
+from core.models.types import *
 
 import asyncio
 import logging
@@ -38,7 +39,7 @@ class Analyst:
         self.sell_commissions = frozendict(sell_commissions)
         self.buy_commissions = frozendict(buy_commissions)
         self.threshold = threshold
-        self._coin_locks: dict[Coin, asyncio.Lock] = {}
+        self._coin_locks: dict[coin_id, asyncio.Lock] = {}
         self._coin_list: dict[Coin, dict[Exchange, float]] = {}
         self.logger = logging.getLogger('analyst')
         self.usdt_subscribers: set[AnalistSubscriber] = set()
@@ -65,7 +66,7 @@ class Analyst:
     #     return self._threshold
     
     @property
-    def coin_locks(self) -> dict[Coin, asyncio.Lock]:
+    def coin_locks(self) -> dict[coin_id, asyncio.Lock]:
         return self._coin_locks
     
     @property
@@ -73,7 +74,7 @@ class Analyst:
         return self._coin_list
     
     def __post_init__(self):
-        self.sorted_coin: ValueSortedDict[Coin, tuple[Departure, Destination, float]] =  ValueSortedDict(lambda value: value[2]) #type: ignore
+        self.sorted_coin: ValueSortedDict[coin_id, tuple[Departure, Destination, float]] =  ValueSortedDict(lambda value: value[2]) #type: ignore
  
         
         coins_set = set(self._coin_pair.values())
@@ -189,15 +190,15 @@ class Analyst:
                 exchange: Exchange
                 
                 async def on_price_update(self, coin_id: int, value: float) -> None:
-                    if coin in self.analyst.coin_list and isinstance(value, float) and value > 0:
-                        async with self.analyst.coin_locks[coin]:
-                            self.analyst._coin_list[coin][self.exchange] = value
+                    if coin_id in self.analyst.coin_list and isinstance(value, float) and value > 0:
+                        async with self.analyst.coin_locks[coin_id]:
+                            self.analyst._coin_list[coin_id][self.exchange] = value
                             
                             try:
-                                benefit = await self.analyst._coin_culc(coin)
+                                benefit = await self.analyst._coin_culc(coin_id)
                                 
                                 if benefit is not None:
-                                    self.analyst.sorted_coin[coin] = benefit
+                                    self.analyst.sorted_coin[coin_id] = benefit
                             except Exception as e:
                                 self.analyst.logger.error(f"Error recalculating {coin.name}: {e}")
                     else:
