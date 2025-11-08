@@ -10,6 +10,7 @@ from core.interfaces.Exceptions import ExchangeConnectionError
 from core.models import Coin, CoinPair, Commission
 from core.services.Analytics.Analyst import Analyst
 from core.services.Analytics.Brain import Brain
+from core.services.Mapper import Mapper
 from infrastructure.ExFactory import ExFactory as ExFactoryImpl
 from .config import api_keys as API
 # from core import ExFactory, ExchangeConnectionError, Coin
@@ -21,12 +22,11 @@ async def main():
             logger.info("ExFactory successfully initialized, exchanges connected, and balances checked.")
             
             
-            _commission: Commission = {}
-            _coin_list: CoinPair = bidict()
-            sell_commissions: SellCommission = {}
-            buy_commissions: BuyCommission = {}
+            exchenges: ExchangeDict = factory.items() #type: ignore 
             
-            exchenges: ExchangeDict = factory.items() # type: ignore
+            mapper: Mapper(exchenges) #type: ignore
+            for exchange in factory:
+                
             
             analyst: Analyst = Analyst( exchenges, _coin_list, sell_commissions, buy_commissions)
             brain: Brain = Brain(analyst, _commission, _coin_list)

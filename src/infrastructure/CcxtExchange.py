@@ -6,7 +6,7 @@ from core.interfaces import Exchange
 from core.interfaces.Dto import CoinDict, Coins
 from core.models import Coin
 from core.protocols import BalanceSubscriber, PriceSubscriber
-from core.models.types import *
+from core.models.types import coin_id, coin_name, amount
 
 
 import asyncio
@@ -20,8 +20,7 @@ from core.services.Mapper import Mapper
 
 class CcxtExchange(Exchange):
     
-    def __init__(self, mapper: Mapper, name: str, api_key: str, api_secret: str, **kwargs):
-        self.mapper = mapper
+    def __init__(self, name: str, api_key: str, api_secret: str, **kwargs):
         self.__api_key = api_key
         self.__api_secret = api_secret
         self.__password = kwargs.get('password', '')
@@ -135,7 +134,21 @@ class CcxtExchange(Exchange):
                     tickers = await self.__ex.watch_tickers(symbols)
                     for symbol, ticker in tickers.items():
                         coin_name = symbol.split('/')[0]
-                        price = ticker['last']
+                        
+                        price = 0 #ticker['last']
+                        
+                        if (ticker['ask'] is not None):
+                            price = ticker['ask']
+                            
+                        elif (ticker['lastPrice'] is not None):
+                            price = ticker['lastPrice']
+                            
+                        elif (ticker['info']['lastPrice'] is not None):
+                            price = ticker['info']['lastPrice']
+                            
+                        if (price == 0):
+                            self.logger.warning(f"There is not fee data for Coin {coin_name} in exchange {self.__ex.id}")
+                        
                         await self._price_notify(self.coins[coin_name], price)
                     
                 except asyncio.CancelledError:

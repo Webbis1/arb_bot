@@ -31,3 +31,5 @@ class BitgetExchange(CcxtExchange):
                 coins.add(coin)
                     
         return coins
+    
+    

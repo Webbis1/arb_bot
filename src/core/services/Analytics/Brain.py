@@ -5,6 +5,7 @@ from core.interfaces import Exchange
 from core.interfaces.Dto.Asset import Asset
 from core.models import Coin, CoinPair, Deal, Commission
 from core.services.Analytics.Analyst import Analyst
+from core.services.Mapper import Mapper
 
 
 @dataclass
@@ -12,26 +13,21 @@ class Brain:
     analyst: 'Analyst'
     _commission: Commission
     _coin_list: CoinPair
+    mapper: Mapper
     _additive: float = 2.0
     _logger: logging.Logger = field(default_factory=lambda: logging.getLogger('Brain'))
     
-    def __post_init__(self):
-        for _, coin in self._coin_list.items():
-            if coin.name == "USDT":
-                self.USDT = coin
-                break
-        if not hasattr(self, 'USDT'): raise ValueError("USDT coin not found in coin list")
     
     async def analyse(self, exchange: Exchange, asset: Asset) -> Recommendation:
-        if asset.coin == self.USDT:
+        if asset.coin_id == self.mapper.usdt:
             return await self.__usdt_analyse(exchange, asset)
-        elif asset.coin in self._coin_list.inverse:
+        elif asset.coin_id in self._coin_list.inverse:
             return await self.__other_analyse(exchange, asset)
         else:
-            self._logger.info(f"Coin {asset.coin.name} not found in coin list")
+            self._logger.info(f"Coin ID = {asset.coin_id} not found in coin list")
             sell: Trade = Trade(
-                buy_coin=self.USDT,
-                sell_coin=asset.coin,
+                buy_coin=self.mapper.usdt,
+                sell_coin=asset.coin_id,
             )
             return sell
         
@@ -42,10 +38,10 @@ class Brain:
             self._logger.info("No deals available")
             return Wait(seconds=10)
         
-        coin_id: int | None = self._coin_list.inverse.get(asset.coin)
+        coin_id: int | None = asset.coin_id #self._coin_list.inverse.get(asset.coin)
         
         if coin_id is None: 
-            self._logger.info(f"Coin {asset.coin.name} not found in coin list")
+            self._logger.info(f"Coin ID = {asset.coin_id} not found in coin list")
             return Wait(seconds=10)
         
         coin: Coin | None = self._commission[deal.departure][deal.destination].get(coin_id)
@@ -59,13 +55,13 @@ class Brain:
         if(profit >= coin.fee):
             if exchange == deal.departure:
                 trade = Trade(
-                    buy_coin= deal.coin,
-                    sell_coin=coin,
+                    buy_coin= deal.coin_id,
+                    sell_coin=coin_id,
                 )
                 return trade
             else:
                 transfer = Transfer(
-                    coin=coin,
+                    coin=coin_id,
                     departure=exchange,
                     destination=deal.destination,
                 )
@@ -74,11 +70,11 @@ class Brain:
         return Wait(seconds=10)
     
     async def __other_analyse(self, current_exchange: Exchange, asset: Asset) -> Recommendation:
-        deal: Deal | None = await self.analyst.get_all_benefits(current_exchange, asset.coin);
+        deal: Deal | None = await self.analyst.get_all_benefits(current_exchange, asset.coin_id);
         
         sell: Trade = Trade(
-                buy_coin=self.USDT,
-                sell_coin=asset.coin,
+                buy_coin=self.mapper.usdt,
+                sell_coin=asset.coin_id,
             )
         
         if deal is None: 
@@ -86,10 +82,10 @@ class Brain:
             return sell
         
         
-        coin_id: int | None = self._coin_list.inverse.get(asset.coin)
+        coin_id: int | None = asset.coin_id #self._coin_list.inverse.get(asset.coin_id)
         
         if coin_id is None: 
-            self._logger.info(f"Coin {asset.coin.name} not found in coin list")
+            self._logger.info(f"Coin ID = {coin_id} not found in coin list")
             return sell
         
         coin: Coin | None = self._commission[deal.departure][deal.destination].get(coin_id)
@@ -102,7 +98,7 @@ class Brain:
         
         if(profit >= coin.fee):   
             transfer = Transfer(
-                coin=coin,
+                coin=coin_id,
                 departure=current_exchange,
                 destination=deal.destination,
             )

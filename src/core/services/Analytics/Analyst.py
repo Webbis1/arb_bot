@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from frozendict import frozendict
 # from asyncio import Queue
 from asyncio import Condition
-from core.models.types import *
+from core.models.types import coin_id, coin_name, amount
 
 import asyncio
 import logging
@@ -133,28 +133,28 @@ class Analyst:
     
     
 
-    async def get_all_benefits(self, buy_exchange: Exchange, coin: Coin) -> Deal | None:
+    async def get_all_benefits(self, buy_exchange: Exchange, coin_id: coin_id) -> Deal | None:
         deal: Deal = Deal(
-            coin=coin,
+            coin_id=coin_id,
             departure=buy_exchange,
             destination=buy_exchange,
             benefit=-float('inf')
         )
         
-        for exchange in self.coin_list[coin]:
+        for exchange in self.coin_list[coin_id]:
             if exchange == buy_exchange: continue
-            benefit = self.__benefit(buy_exchange, exchange, coin)
+            benefit = self.__benefit(buy_exchange, exchange, coin_id)
             if benefit is not None and benefit >= deal.benefit:
                 deal.destination = exchange
                 deal.benefit = benefit
                 
         if deal.benefit == -float('inf'):
-            self.logger.error(f"Could not find any valid benefit for coin {coin} from exchange {buy_exchange}")
+            self.logger.error(f"Could not find any valid benefit for coin ID = {coin_id} from exchange {buy_exchange}")
             return None
         return deal
 
     async def get_best_deal(self) -> Deal | None:
-        best_coin: Coin
+        best_coin: coin_id
         if len(self.sorted_coin) == 0:
             return None
         best_coin, exchanges_data = self.sorted_coin.peekitem(-1) # type: ignore
@@ -166,7 +166,7 @@ class Analyst:
         best_benefit: float = exchanges_data[2]
         
         deal = Deal(
-            coin=best_coin,
+            coin_id=best_coin,
             departure=buy_exchange,
             destination=sell_exchange,
             benefit=best_benefit
@@ -175,11 +175,11 @@ class Analyst:
 
     async def get_all_prices(self) -> All_prices:
         all_prices: All_prices = {}
-        for coin, exchange_prices in self.coin_list.items():
+        for coin_id, exchange_prices in self.coin_list.items():
             for exchange, price in exchange_prices.items():
                 if exchange not in all_prices:
                     all_prices[exchange] = {}
-                all_prices[exchange][coin] = price
+                all_prices[exchange][coin_id] = price
         return all_prices
     
     async def start(self):

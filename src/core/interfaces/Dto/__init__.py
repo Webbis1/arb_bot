@@ -9,12 +9,13 @@ from .Wait import Wait
 
 from core.models.types import *
 
+from core.models.types import coin_id, coin_name, amount
 
 Recommendation: TypeAlias = Trade | Transfer | Wait
 Coins = set[Coin]
 CoinDict = dict[Coin, float]
 ExchangeDict = dict[str, Exchange]
-All_prices = dict[Exchange, CoinDict]
+All_prices = dict[Exchange, dict[coin_id, float]]
 
 
     

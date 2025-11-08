@@ -3,6 +3,8 @@ from dataclasses import dataclass
 from core.models import Coin
 from core.interfaces import Exchange
 
+from core.models.types import coin_id, coin_name, amount
+
 @dataclass
 class Deal:
     """
@@ -24,7 +26,7 @@ class Deal:
         >>> Deal(coin=btc, departure=exchange_a, destination=exchange_b, benefit=12.5)
     """
     
-    coin: Coin
+    coin_id: coin_id
     departure: Exchange
     destination: Exchange
     benefit: float
