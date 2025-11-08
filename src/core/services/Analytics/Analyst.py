@@ -33,6 +33,8 @@ class Analyst:
     
     # logger: logging.Logger = field(default_factory=lambda: logging.getLogger('analyst'))
     
+    
+    
     def __init__(self, exchenges: ExchangeDict, coin_pair: CoinPair, sell_commissions: SellCommission, buy_commissions: BuyCommission, threshold: float = 0.002) -> None:
         self.exchenges = frozendict(exchenges)
         self._coin_pair = frozendict(coin_pair)
