@@ -7,6 +7,8 @@ from .Trade import Trade
 from .Transfer import Transfer
 from .Wait import Wait
 
+from core.models.types import *
+
 
 Recommendation: TypeAlias = Trade | Transfer | Wait
 Coins = set[Coin]
@@ -23,5 +25,5 @@ Destination: TypeAlias = Exchange
 
 
 TransferCommission: TypeAlias = dict[Coin, dict[Departure, dict[Destination, float]]]
-SellCommission: TypeAlias = dict[Coin, dict[Exchange, float]]
-BuyCommission: TypeAlias = dict[Coin, dict[Exchange, float]]
+SellCommission: TypeAlias = dict[coin_id, dict[Exchange, float]]
+BuyCommission: TypeAlias = dict[coin_id, dict[Exchange, float]]

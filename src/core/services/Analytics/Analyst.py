@@ -40,7 +40,7 @@ class Analyst:
         self.buy_commissions = frozendict(buy_commissions)
         self.threshold = threshold
         self._coin_locks: dict[coin_id, asyncio.Lock] = {}
-        self._coin_list: dict[Coin, dict[Exchange, float]] = {}
+        self._coin_list: dict[coin_id, dict[Exchange, float]] = {}
         self.logger = logging.getLogger('analyst')
         self.usdt_subscribers: set[AnalistSubscriber] = set()
         self.other_subscribers: set[AnalistSubscriber] = set()
@@ -70,7 +70,7 @@ class Analyst:
         return self._coin_locks
     
     @property
-    def coin_list(self) -> dict[Coin, dict[Exchange, float]]:
+    def coin_list(self) -> dict[coin_id, dict[Exchange, float]]:
         return self._coin_list
     
     def __post_init__(self):
@@ -200,76 +200,76 @@ class Analyst:
                                 if benefit is not None:
                                     self.analyst.sorted_coin[coin_id] = benefit
                             except Exception as e:
-                                self.analyst.logger.error(f"Error recalculating {coin.name}: {e}")
+                                self.analyst.logger.error(f"Error recalculating Coid ID = {coin_id}: {e}")
                     else:
-                        self.analyst.logger.error(f"Invalid price update for {coin.name} on {self.exchange}: {value}")
+                        self.analyst.logger.error(f"Invalid price update for Coin ID = {coin_id} on {self.exchange}: {value}")
             
             await exchange.subscribe_price(Subscriber(self, exchange))
         
         self.logger.info("Monitoring started")
         
-    async def _coin_culc(self, coin: Coin) -> tuple[Departure, Destination, float] | None:
-        if len(self.coin_list[coin]) < 2:
+    async def _coin_culc(self, coin_id: coin_id) -> tuple[Departure, Destination, float] | None:
+        if len(self.coin_list[coin_id]) < 2:
             return None
         
-        buy_ex: Exchange | None = self.__find_min_element_for_coin(coin)
+        buy_ex: Exchange | None = self.__find_min_element_for_coin(coin_id)
         if buy_ex is None:
-            self.logger.error(f"Could not determine buy exchange for coin {coin}")
+            self.logger.error(f"Could not determine buy exchange for coin ID = {coin_id}")
             return None
         
         buy_exchange: Departure = buy_ex
         peak_point: float = -float('inf')
         sell_exchange: Destination | None = None
         
-        for exchange in self._coin_list[coin]:
-            benefit = self.__benefit(buy_exchange, exchange, coin)
+        for exchange in self._coin_list[coin_id]:
+            benefit = self.__benefit(buy_exchange, exchange, coin_id)
             if benefit is not None and benefit >= peak_point:
                 sell_exchange = exchange
                 peak_point = benefit
         
         if sell_exchange is None:
-            self.logger.error(f"Could not determine sell exchange for coin {coin}")
+            self.logger.error(f"Could not determine sell exchange for coin ID = {coin_id}")
             return None
         
         return buy_exchange, sell_exchange, peak_point
     
-    def __find_min_element_for_coin(self, coin: Coin) -> Exchange | None:
-        if coin not in self.coin_list:
-            self.logger.error(f"Coin {coin} not found in coin list")
+    def __find_min_element_for_coin(self, coin_id: coin_id) -> Exchange | None:
+        if coin_id not in self.coin_list:
+            self.logger.error(f"Coin ID = {coin_id} not found in coin list")
             return None
-        elif len(self.coin_list[coin]) == 0:
-            self.logger.error(f"No exchanges available for coin {coin}")
+        elif len(self.coin_list[coin_id]) == 0:
+            self.logger.error(f"No exchanges available for coin ID = {coin_id}")
             return None
         else:
-            exchanges_prices: dict[Exchange, float] = self.coin_list[coin]
+            exchanges_prices: dict[Exchange, float] = self.coin_list[coin_id]
             min_exchange: Exchange = min(exchanges_prices, key=exchanges_prices.__getitem__)
             return min_exchange
                 
-    def __benefit(self, buy_exchange: Departure, sell_exchange: Destination, coin: Coin) -> float | None:
+    def __benefit(self, buy_exchange: Departure, sell_exchange: Destination, coin_id: coin_id) -> float | None:
         try:
             procedure_time = 1.0
             
             if procedure_time is None or procedure_time <= 0:
                 return None
                 
-            roi = self.__roi(buy_exchange, sell_exchange, coin)
+            roi = self.__roi(buy_exchange, sell_exchange, coin_id)
             if roi is None:
                 return None
             return roi / procedure_time
             
         except ZeroDivisionError:
-            self.logger.error(f"Procedure time is zero for coin {coin} between {buy_exchange} and {sell_exchange}")
+            self.logger.error(f"Procedure time is zero for coin ID = {coin_id} between {buy_exchange} and {sell_exchange}")
             return None
         except Exception:
-            self.logger.error(f"Unexpected error calculating benefit for coin {coin} between {buy_exchange} and {sell_exchange}")
+            self.logger.error(f"Unexpected error calculating benefit for coin ID = {coin_id} between {buy_exchange} and {sell_exchange}")
             return None
 
-    def __roi(self, buy_exchange: Departure, sell_exchange: Destination, coin: Coin) -> float | None:
+    def __roi(self, buy_exchange: Departure, sell_exchange: Destination, coin_id: coin_id) -> float | None:
         try:
-            buy_commission: float = self.buy_commissions[coin][buy_exchange]
-            sale_commission: float = self.sell_commissions[coin][sell_exchange]
-            buy_price: float = self.coin_list[coin][buy_exchange]
-            sale_price: float = self.coin_list[coin][sell_exchange]
+            buy_commission: float = self.buy_commissions[coin_id][buy_exchange]
+            sale_commission: float = self.sell_commissions[coin_id][sell_exchange]
+            buy_price: float = self.coin_list[coin_id][buy_exchange]
+            sale_price: float = self.coin_list[coin_id][sell_exchange]
             
             roi = ((sale_price * (1.0 - sale_commission) * (1.0 - buy_commission)) / buy_price) - 1
                 
@@ -279,7 +279,7 @@ class Analyst:
             self.logger.error(f"Missing data for ROI calculation: {e}")
             return None
         except ZeroDivisionError:
-            self.logger.error(f"Zero buy price for {coin} on {buy_exchange}")
+            self.logger.error(f"Zero buy price for Coin ID = {coin_id} on {buy_exchange}")
             return None
         except Exception as e:
             self.logger.error(f"Unexpected error in ROI calculation: {e}")
