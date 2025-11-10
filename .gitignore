@@ -10,8 +10,8 @@
 
 /temp
 
-/src/tests
+# /src/tests
 
-/sanyokTests
+# /sanyokTests
 
-/docs
+# /docs
