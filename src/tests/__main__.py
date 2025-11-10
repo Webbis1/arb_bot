@@ -79,6 +79,11 @@ async def main():
                     if task.exception():
                         print(f"Task failed: {task.exception()}")
                         
+                for ex in factory.values():
+                    ex_service = ExchangeService(ex)
+                    
+                    await ex_service.sell(5, 0)
+                        
 
                 for task in pending:
                     task.cancel()

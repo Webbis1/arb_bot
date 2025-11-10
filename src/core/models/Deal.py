@@ -30,3 +30,6 @@ class Deal:
     departure: Exchange
     destination: Exchange
     benefit: float
+    
+    def __str__(self) -> str:
+        return f"coin_id: {self.coin_id}, departure: {self.departure.name}, destination: {self.destination.name}, benefit: {self.benefit}"

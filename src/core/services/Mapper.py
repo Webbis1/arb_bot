@@ -16,11 +16,11 @@ logger = logging.getLogger(__name__)
 class Mapper:
     def __init__(self):
         self.__name_iter: COIN_ID = 0
-        self._all_coins: bidict[Coin, int] = bidict()
+        self._all_coins: bidict[Coin, COIN_ID] = bidict()
     # all_ex: dict[str, set[Coin]]
     # all_adresess: dict[str, int]
     # actual_adresess: dict[str, int]
-        self._all_coin_names: defaultdict[str, bidict[COIN_NAME, COIN_ID]] = defaultdict()
+        self._all_coin_names: defaultdict[EXCHANGE_NAME, bidict[COIN_NAME, COIN_ID]] = defaultdict()
         # self._all_network_names: defaultdict[str, bidict[int, str]]
     # _usdt: int | None = field(default = None)
 
@@ -78,7 +78,7 @@ class Mapper:
             self._all_coin_names[ex.name] = current_exchange_name_id
             
         logger.info(f"Data generation completed. Generated {len(address_id)} unique coin addresses.")
-        # return address_id, last_name_id
+
                 
     def get_coinID(self): ...
     # name + ex
@@ -92,6 +92,25 @@ class Mapper:
     @property
     def all_coins(self) -> set[COIN_ID]:
         return set(self._all_coins.values())
+    
+    @property
+    def analyzed_coins(self) -> set[COIN_ID]:
+        ex_sets: dict[EXCHANGE_NAME, set[COIN_ID]] = {}
+        
+        for ex_name, coin_pair in self._all_coin_names.items():
+            ex_sets[ex_name] = set()
+            for ex_name2, coin_pair2 in self._all_coin_names.items():
+                if ex_name == ex_name2: continue
+                intersection: set[COIN_ID] = set(coin_pair.values()) & set(coin_pair2.values())
+                ex_sets[ex_name] |= intersection
+        
+        analyzed_coins: set[COIN_ID] = set()
+            
+        for coin_set in ex_sets.values():
+            analyzed_coins |= coin_set
+            
+        return analyzed_coins
+        
     
     @property
     def exchange_set(self) -> set[Exchange]:

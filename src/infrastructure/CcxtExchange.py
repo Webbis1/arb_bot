@@ -51,8 +51,9 @@ class CcxtExchange(Exchange):
     
     async def start(self, coins: bidict[COIN_NAME, COIN_ID]) -> None:
         if self._is_running: return
-        
+        # self.logger.info(coins)
         self.coins = coins
+        
         self._is_running = True
         self.wallet = {}
         for coin_id in coins.inverse.keys():
@@ -82,6 +83,8 @@ class CcxtExchange(Exchange):
             self.logger.error(f"[{self.name}] Error in start: {e}")
         finally:
             self._is_running = False
+            for coin_id in self.coins.values():
+                await self._price_notify(coin_id, -10.0)
             self.logger.info(f"[{self.name}] Мониторинг остановлен")
     
     def _get_symbols(self, coin_names: list[COIN_NAME]) -> list[str]:

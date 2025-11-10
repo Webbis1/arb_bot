@@ -8,7 +8,7 @@ from bidict import bidict
 from core.interfaces import ExFactory
 from core.interfaces.Dto import BuyCommission, ExchangeDict, SellCommission
 from core.interfaces.Exceptions import ExchangeConnectionError
-from core.models import Coin, CoinPair, Commission
+from core.models import Coin, CoinPair, Commission, Deal
 from core.services.Analytics.Analyst import Analyst
 from core.services.Analytics.Brain import Brain
 from core.services.Mapper import Mapper
@@ -17,6 +17,15 @@ from .config import api_keys as API
 # from core import ExFactory, ExchangeConnectionError, Coin
 
 logger = logging.getLogger('main')
+
+async def printAnal(analyst: Analyst):
+    while True:
+        deal: Deal | None = await analyst.get_best_deal()
+        if deal is not None:
+            string: str = str(deal) + "\t" + analyst.mapper.get_coin_name_id_for_ex(deal.departure.name).inverse[deal.coin_id]
+            logger.info(string)
+        
+        await asyncio.sleep(2)
 
 async def main():
     try:
@@ -35,6 +44,11 @@ async def main():
             
             tasks = [asyncio.create_task(ex.start(mapper.get_coin_name_id_for_ex(ex.name))) for ex in factory.values()]
             
+            analyst: Analyst = Analyst(mapper)
+            
+            await analyst.start()
+            
+            tasks.append(asyncio.create_task(printAnal(analyst)))
             
             try:
                 done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)

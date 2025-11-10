@@ -24,14 +24,14 @@ class Analyst:
         self._coin_locks: dict[COIN_ID, asyncio.Lock] = {}
         self._coin_list: dict[COIN_ID, dict[Exchange, PRICE]] = {}
         self.logger = logging.getLogger('analyst')
-        self.usdt_subscribers: set[AnalistSubscriber] = set()
-        self.other_subscribers: set[AnalistSubscriber] = set()
+        # self.usdt_subscribers: set[AnalistSubscriber] = set()
+        # self.other_subscribers: set[AnalistSubscriber] = set()
         self.__post_init__()
-        self._usdt_lock = asyncio.Lock()
-        self._other_lock = asyncio.Lock()
+        # self._usdt_lock = asyncio.Lock()
+        # self._other_lock = asyncio.Lock()
         
-        self._usdt_condition = Condition()
-        self._other_condition = Condition()
+        # self._usdt_condition = Condition()
+        # self._other_condition = Condition()
         
     
     @property
@@ -46,7 +46,7 @@ class Analyst:
         self.sorted_coin: ValueSortedDict[COIN_ID, tuple[DEPARTURE, DESTINATION, PROFIT]] =  ValueSortedDict(lambda value: value[2]) #type: ignore
  
         
-        coins_set = self.mapper.all_coins
+        coins_set = self.mapper.analyzed_coins
         
         for coin_id in coins_set:
             lock = self.coin_locks.get(coin_id)
@@ -112,31 +112,51 @@ class Analyst:
         self.logger.info("Starting data collection")
         
         for exchange in self.mapper.exchange_set:
+            self.logger.info(exchange)
+            
             @dataclass
             class Subscriber(PriceSubscriber):
                 analyst: Analyst
                 exchange: Exchange
                 
+                def __hash__(self) -> int:
+                    string: str = "analyst" + str(self.exchange.__hash__())
+                    return hash(string)
+                
                 async def on_price_update(self, coin_id: COIN_ID, price: float) -> None:
-                    if coin_id in self.analyst.coin_list and isinstance(price, float) and price > 0:
+                    if coin_id in self.analyst.coin_list and isinstance(price, float):
                         async with self.analyst.coin_locks[coin_id]:
-                            self.analyst._coin_list[coin_id][self.exchange] = price
                             
-                            try:
-                                benefit = await self.analyst._coin_culc(coin_id)
+                            if price > 0:
+                                self.analyst._coin_list[coin_id][self.exchange] = price
                                 
-                                if benefit is not None:
-                                    self.analyst.sorted_coin[coin_id] = benefit
-                            except Exception as e:
-                                self.analyst.logger.error(f"Error recalculating Coid ID = {coin_id}: {e}")
+                                try:
+                                    benefit = await self.analyst._coin_culc(coin_id)
+                                    
+                                    if benefit is not None:
+                                        self.analyst.sorted_coin[coin_id] = benefit
+                                except Exception as e:
+                                    self.analyst.logger.error(f"Error recalculating Coid ID = {coin_id}: {e}")
+                            else:
+                                self.analyst._coin_list[coin_id].pop(self.exchange)
+                                
+                                try:
+                                    benefit = await self.analyst._coin_culc(coin_id)
+                                    
+                                    if benefit is not None:
+                                        self.analyst.sorted_coin[coin_id] = benefit
+                                except Exception as e:
+                                    self.analyst.logger.error(f"Error recalculating Coid ID = {coin_id}: {e}")
                     else:
-                        self.analyst.logger.error(f"Invalid price update for Coin ID = {coin_id} on {self.exchange}: {price}")
+                        pass
+                        # self.analyst.logger.error(f"Invalid price update for Coin ID = {coin_id} on {self.exchange}: {price}")
             
             await exchange.subscribe_price(Subscriber(self, exchange))
         
         self.logger.info("Monitoring started")
         
     async def _coin_culc(self, coin_id: COIN_ID) -> tuple[DEPARTURE, DESTINATION, PROFIT] | None:
+        # self.logger.info(f"Coin culc for {coin_id}")
         if len(self.coin_list[coin_id]) < 2:
             return None
         
