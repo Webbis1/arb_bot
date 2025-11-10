@@ -51,8 +51,9 @@ class CcxtExchange(Exchange):
     
     async def start(self, coins: bidict[COIN_NAME, COIN_ID]) -> None:
         if self._is_running: return
+                
+        #self.coins = coins
         
-        self.coins = coins
         self._is_running = True
         self.wallet = {}
         for coin_id in coins.inverse.keys():
@@ -206,7 +207,7 @@ class CcxtExchange(Exchange):
     
     async def sell(self, coin_id: int, quantity: float, usdt_name: str = 'USDT'):
         coin_name = self.coins.inverse.get(coin_id)
-        print(self.coins)
+        print(f'{self.__ex.id} - {coin_name}')
         
         # symbol = f"{coin_name}/{usdt_name}"
         # try:
@@ -275,3 +276,6 @@ class CcxtExchange(Exchange):
         # loge NotImplementedError
         return []
         
+        
+    def set_coins_by_mapper(self, coins: bidict[COIN_NAME, COIN_ID]):
+        self.coins = coins

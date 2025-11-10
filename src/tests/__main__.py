@@ -57,48 +57,60 @@ async def main():
             
             await mapper.generate_data(factory.values())
             
+            for ex in factory.values():
+                ex.set_coins_by_mapper(mapper.get_coin_name_id_for_ex(ex.name))
+            
+            tasks = [asyncio.create_task(ex.start(mapper.get_coin_name_id_for_ex(ex.name))) for ex in factory.values()]
+            
+            for ex in factory.values():
+                ex_service = ExchangeService(ex)
+                print(ex.name)
+                await ex_service.sell(1, 0)
+            
+            
             # balance_subscribers_tasks = []
             # price_subscribers_tasks = []
             
-            # for ex in factory.values():
+            # for ex in factory.values():                
             #     ex_service = ExchangeService(ex)
                                 
             #     balance_subscribers_tasks.append(asyncio.create_task(ex_service.start_balance_observe()))
-            #     price_subscribers_tasks.append(asyncio.create_task(ex_service.start_price_observe()))                 
+            #     #price_subscribers_tasks.append(asyncio.create_task(ex_service.start_price_observe()))                 
             
                 
             # await asyncio.gather(*balance_subscribers_tasks, *price_subscribers_tasks)
             
+            done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)
             
-            tasks = [asyncio.create_task(ex.start(mapper.get_coin_name_id_for_ex(ex.name))) for ex in factory.values()]
-            
-            try:
-                done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)
+            # try:
+            #     done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)
                 
-                for task in done:
-                    if task.exception():
-                        print(f"Task failed: {task.exception()}")
-                        
+            #     print('fafasdfsdsafasdf')
+                
+            #     for task in done:
+            #         if task.exception():
+            #             print(f"Task failed: {task.exception()}")
+                    
 
-                for task in pending:
-                    task.cancel()
+            #     for task in pending:
+            #         task.cancel()
                     
-            except KeyboardInterrupt:
-                print("Received interrupt signal, shutting down...")
+            # except KeyboardInterrupt:
+            #     print("Received interrupt signal, shutting down...")
                 
-                # Отменяем все задачи
-                for task in tasks:
-                    task.cancel()
+            #     # Отменяем все задачи
+            #     for task in tasks:
+            #         task.cancel()
                     
-                # for bst in balance_subscribers_tasks:
-                #     bst.cancel()
+            #     # for bst in balance_subscribers_tasks:
+            #     #     bst.cancel()
                     
-                # for pct in price_subscribers_tasks:
-                #     pct.cancel()
+            #     # for pct in price_subscribers_tasks:
+            #     #     pct.cancel()
                 
-                await asyncio.gather(*tasks, return_exceptions=True)
+            #     await asyncio.gather(*tasks, return_exceptions=True)
                 
-                print("Shutdown complete")
+            #     print("Shutdown complete")
             
             
     except ExchangeConnectionError as e:
