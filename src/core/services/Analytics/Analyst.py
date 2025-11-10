@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from frozendict import frozendict
 # from asyncio import Queue
 from asyncio import Condition
-from core.models.types import coin_id, coin_name, amount
+from core.models.types import COIN_ID, COIN_NAME, PRICE, amount, PROFIT
 
 import asyncio
 import logging
@@ -13,36 +13,16 @@ import logging
 
 from core.interfaces.Dto import Recommendation, Trade, Transfer, Wait
 from core.models import Coin, Deal, CoinPair
-from core.interfaces import Exchange, ExchangeDict, All_prices, Departure, Destination, SellCommission, BuyCommission
+from core.interfaces import Exchange, ExchangeDict, All_prices, DEPARTURE, DESTINATION, SellCommission, BuyCommission
 from core.protocols import AnalistSubscriber, PriceSubscriber
+from core.services.Mapper import Mapper
 
-# @dataclass
 class Analyst:
-    # exchenges: ExchangeDict = field()
-    """ dict[str, Exchange]"""
-    # _coin_pair: CoinPair = field()
-    """ bidict[int, Coin] """
-    # sell_commissions: SellCommission = field()
-    """ frozendict[Coin, frozendict[Exchange, float]]"""
-    # buy_commissions: BuyCommission = field()
-    """ dict[Coin, dict[Exchange, float]]"""
-    # _threshold: float = field(default=0.002)
-    
-    # _coin_list: dict[Coin, dict[Exchange, float]] = field(default_factory=dict)
-    # _coin_locks: dict[Coin, asyncio.Lock] = field(default_factory=dict)
-    
-    # logger: logging.Logger = field(default_factory=lambda: logging.getLogger('analyst'))
-    
-    
-    
-    def __init__(self, exchenges: ExchangeDict, coin_pair: CoinPair, sell_commissions: SellCommission, buy_commissions: BuyCommission, threshold: float = 0.002) -> None:
-        self.exchenges = frozendict(exchenges)
-        self._coin_pair = frozendict(coin_pair)
-        self.sell_commissions = frozendict(sell_commissions)
-        self.buy_commissions = frozendict(buy_commissions)
+    def __init__(self, mapper: Mapper, threshold: float = 0.002) -> None:
+        self.mapper:Mapper = mapper
         self.threshold = threshold
-        self._coin_locks: dict[coin_id, asyncio.Lock] = {}
-        self._coin_list: dict[coin_id, dict[Exchange, float]] = {}
+        self._coin_locks: dict[COIN_ID, asyncio.Lock] = {}
+        self._coin_list: dict[COIN_ID, dict[Exchange, PRICE]] = {}
         self.logger = logging.getLogger('analyst')
         self.usdt_subscribers: set[AnalistSubscriber] = set()
         self.other_subscribers: set[AnalistSubscriber] = set()
@@ -53,87 +33,33 @@ class Analyst:
         self._usdt_condition = Condition()
         self._other_condition = Condition()
         
-        
-        for coin in set(coin_pair.values()):
-            if coin.name == "USDT":
-                self.USDT: Coin = coin
-        
     
     @property
-    def coin_pair(self):
-        return self._coin_pair
-    
-    # @property
-    # def threshold(self) -> float:
-    #     return self._threshold
-    
-    @property
-    def coin_locks(self) -> dict[coin_id, asyncio.Lock]:
+    def coin_locks(self) -> dict[COIN_ID, asyncio.Lock]:
         return self._coin_locks
     
     @property
-    def coin_list(self) -> dict[coin_id, dict[Exchange, float]]:
+    def coin_list(self) -> dict[COIN_ID, dict[Exchange, PRICE]]:
         return self._coin_list
     
     def __post_init__(self):
-        self.sorted_coin: ValueSortedDict[coin_id, tuple[Departure, Destination, float]] =  ValueSortedDict(lambda value: value[2]) #type: ignore
+        self.sorted_coin: ValueSortedDict[COIN_ID, tuple[DEPARTURE, DESTINATION, PROFIT]] =  ValueSortedDict(lambda value: value[2]) #type: ignore
  
         
-        coins_set = set(self._coin_pair.values())
+        coins_set = self.mapper.all_coins
         
-        for coin in coins_set:
-            lock = self.coin_locks.get(coin)
+        for coin_id in coins_set:
+            lock = self.coin_locks.get(coin_id)
             if lock is None or not isinstance(lock, asyncio.Lock):
-                self._coin_locks[coin] = asyncio.Lock()
+                self._coin_locks[coin_id] = asyncio.Lock()
                 
-            price = self.coin_list.get(coin)
+            price = self.coin_list.get(coin_id)
             if price is None or not isinstance(price, dict):
-                self._coin_list[coin] = {}
+                self._coin_list[coin_id] = {}
         
-        
-        if not self.check_initialized():
-            raise ValueError("Analyst is not properly initialized.")
  
-    def check_initialized(self) -> bool:
-        try:
-            exchanges_set = set(self.exchenges.values())
-            coins_set = set(self._coin_pair.values())
 
-            def _validate_commissions(comm: frozendict[Coin, frozendict[Exchange, float]], table_name: str) -> None:
-                for c in list(comm.keys()):
-                    if c not in coins_set:
-                        raise ValueError(f"Unexpected coin {c} in {table_name}")
-
-                for coin in coins_set:
-                    if coin not in comm or not isinstance(comm[coin], dict):
-                        raise ValueError(f"Missing commission data for coin {coin} in {table_name}")
-
-                    for ex in list(comm[coin].keys()):
-                        if ex not in exchanges_set:
-                            raise ValueError(f"Unexpected exchange {ex} for coin {coin} in {table_name}")
-
-                    for ex in exchanges_set:
-                        if ex not in comm[coin]:
-                            raise ValueError(f"Missing commission for coin {coin} on exchange {ex} in {table_name}")
-                        else:
-                            val = comm[coin][ex]
-                            if val is None:
-                                raise ValueError(f"Commission for coin {coin} on exchange {ex} in {table_name} is None")
-                            elif not isinstance(val, float):
-                                raise ValueError(f"Commission for coin {coin} on exchange {ex} in {table_name} is not float")
-
-            _validate_commissions(self.sell_commissions, "sell_commissions")
-            _validate_commissions(self.buy_commissions, "buy_commissions")
-
-            return True
-
-        except Exception as e:
-            self.logger.error(f"Initialization check failed: {e}")
-            return False
-    
-    
-
-    async def get_all_benefits(self, buy_exchange: Exchange, coin_id: coin_id) -> Deal | None:
+    async def get_all_benefits(self, buy_exchange: Exchange, coin_id: COIN_ID) -> Deal | None:
         deal: Deal = Deal(
             coin_id=coin_id,
             departure=buy_exchange,
@@ -154,15 +80,15 @@ class Analyst:
         return deal
 
     async def get_best_deal(self) -> Deal | None:
-        best_coin: coin_id
+        best_coin: COIN_ID
         if len(self.sorted_coin) == 0:
             return None
         best_coin, exchanges_data = self.sorted_coin.peekitem(-1) # type: ignore
         if exchanges_data is None or len(exchanges_data) != 3:
             return None
         
-        buy_exchange: Departure = exchanges_data[0]
-        sell_exchange: Destination = exchanges_data[1] 
+        buy_exchange: DEPARTURE = exchanges_data[0]
+        sell_exchange: DESTINATION = exchanges_data[1] 
         best_benefit: float = exchanges_data[2]
         
         deal = Deal(
@@ -185,16 +111,16 @@ class Analyst:
     async def start(self):
         self.logger.info("Starting data collection")
         
-        for _, exchange in self.exchenges.items():
+        for exchange in self.mapper.exchange_set:
             @dataclass
             class Subscriber(PriceSubscriber):
                 analyst: Analyst
                 exchange: Exchange
                 
-                async def on_price_update(self, coin_id: int, value: float) -> None:
-                    if coin_id in self.analyst.coin_list and isinstance(value, float) and value > 0:
+                async def on_price_update(self, coin_id: COIN_ID, price: float) -> None:
+                    if coin_id in self.analyst.coin_list and isinstance(price, float) and price > 0:
                         async with self.analyst.coin_locks[coin_id]:
-                            self.analyst._coin_list[coin_id][self.exchange] = value
+                            self.analyst._coin_list[coin_id][self.exchange] = price
                             
                             try:
                                 benefit = await self.analyst._coin_culc(coin_id)
@@ -204,13 +130,13 @@ class Analyst:
                             except Exception as e:
                                 self.analyst.logger.error(f"Error recalculating Coid ID = {coin_id}: {e}")
                     else:
-                        self.analyst.logger.error(f"Invalid price update for Coin ID = {coin_id} on {self.exchange}: {value}")
+                        self.analyst.logger.error(f"Invalid price update for Coin ID = {coin_id} on {self.exchange}: {price}")
             
             await exchange.subscribe_price(Subscriber(self, exchange))
         
         self.logger.info("Monitoring started")
         
-    async def _coin_culc(self, coin_id: coin_id) -> tuple[Departure, Destination, float] | None:
+    async def _coin_culc(self, coin_id: COIN_ID) -> tuple[DEPARTURE, DESTINATION, PROFIT] | None:
         if len(self.coin_list[coin_id]) < 2:
             return None
         
@@ -219,9 +145,9 @@ class Analyst:
             self.logger.error(f"Could not determine buy exchange for coin ID = {coin_id}")
             return None
         
-        buy_exchange: Departure = buy_ex
+        buy_exchange: DEPARTURE = buy_ex
         peak_point: float = -float('inf')
-        sell_exchange: Destination | None = None
+        sell_exchange: DESTINATION | None = None
         
         for exchange in self._coin_list[coin_id]:
             benefit = self.__benefit(buy_exchange, exchange, coin_id)
@@ -235,7 +161,7 @@ class Analyst:
         
         return buy_exchange, sell_exchange, peak_point
     
-    def __find_min_element_for_coin(self, coin_id: coin_id) -> Exchange | None:
+    def __find_min_element_for_coin(self, coin_id: COIN_ID) -> Exchange | None:
         if coin_id not in self.coin_list:
             self.logger.error(f"Coin ID = {coin_id} not found in coin list")
             return None
@@ -247,7 +173,7 @@ class Analyst:
             min_exchange: Exchange = min(exchanges_prices, key=exchanges_prices.__getitem__)
             return min_exchange
                 
-    def __benefit(self, buy_exchange: Departure, sell_exchange: Destination, coin_id: coin_id) -> float | None:
+    def __benefit(self, buy_exchange: DEPARTURE, sell_exchange: DESTINATION, coin_id: COIN_ID) -> float | None:
         try:
             procedure_time = 1.0
             
@@ -266,10 +192,12 @@ class Analyst:
             self.logger.error(f"Unexpected error calculating benefit for coin ID = {coin_id} between {buy_exchange} and {sell_exchange}")
             return None
 
-    def __roi(self, buy_exchange: Departure, sell_exchange: Destination, coin_id: coin_id) -> float | None:
+    def __roi(self, buy_exchange: DEPARTURE, sell_exchange: DESTINATION, coin_id: COIN_ID) -> float | None:
         try:
-            buy_commission: float = self.buy_commissions[coin_id][buy_exchange]
-            sale_commission: float = self.sell_commissions[coin_id][sell_exchange]
+            # buy_commission: float = self.buy_commissions[coin_id][buy_exchange] 
+            # sale_commission: float = self.sell_commissions[coin_id][sell_exchange]
+            sale_commission = 0.01
+            buy_commission = 0.01
             buy_price: float = self.coin_list[coin_id][buy_exchange]
             sale_price: float = self.coin_list[coin_id][sell_exchange]
             

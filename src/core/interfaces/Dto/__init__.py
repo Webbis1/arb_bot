@@ -7,24 +7,21 @@ from .Trade import Trade
 from .Transfer import Transfer
 from .Wait import Wait
 
-from core.models.types import *
+# from core.models.types import *
 
-from core.models.types import coin_id, coin_name, amount
+from core.models.types import COIN_ID, DEPARTURE, DESTINATION, COIN_NAME, amount, EXCHANGE_NAME
 
 Recommendation: TypeAlias = Trade | Transfer | Wait
 Coins = set[Coin]
 CoinDict = dict[Coin, float]
-ExchangeDict = dict[str, Exchange]
-All_prices = dict[Exchange, dict[coin_id, float]]
+ExchangeDict = dict[EXCHANGE_NAME, Exchange]
+All_prices = dict[Exchange, dict[COIN_ID, float]]
 
 
     
-Departure: TypeAlias = Exchange 
-"""Биржа отправления"""
-Destination: TypeAlias = Exchange
-"""Биржа назначения"""
 
 
-TransferCommission: TypeAlias = dict[Coin, dict[Departure, dict[Destination, float]]]
-SellCommission: TypeAlias = dict[coin_id, dict[Exchange, float]]
-BuyCommission: TypeAlias = dict[coin_id, dict[Exchange, float]]
+
+TransferCommission: TypeAlias = dict[Coin, dict[DEPARTURE, dict[DESTINATION, float]]]
+SellCommission: TypeAlias = dict[COIN_ID, dict[Exchange, float]]
+BuyCommission: TypeAlias = dict[COIN_ID, dict[Exchange, float]]

@@ -1,13 +1,13 @@
 from dataclasses import dataclass, field
 
-from core.interfaces.Dto import Destination
-from core.models import Coin
+# from core.interfaces.Dto import Destination
+# from core.models import Coin
 
-from core.models.types import coin_id
+from core.models.types import COIN_ID
 
 @dataclass
 class Trade:
-    buy_coin: coin_id
-    sell_coin: coin_id
+    buy_coin: COIN_ID
+    sell_coin: COIN_ID
 
     
