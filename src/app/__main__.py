@@ -22,7 +22,7 @@ async def printAnal(analyst: Analyst):
     while True:
         deal: Deal | None = await analyst.get_best_deal()
         if deal is not None:
-            string: str = str(deal) + "\t" + analyst.mapper.get_coin_name_id_for_ex(deal.departure.name).inverse[deal.coin_id]
+            string: str = str(deal) + "\t" + analyst.mapper.get_coin_name_id_for_ex(deal.departure.name).inverse[deal.coin_id] + f" - coin in dict {len(analyst.coin_list)}"
             logger.info(string)
         
         await asyncio.sleep(2)

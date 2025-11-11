@@ -138,15 +138,16 @@ class Analyst:
                                 except Exception as e:
                                     self.analyst.logger.error(f"Error recalculating Coid ID = {coin_id}: {e}")
                             else:
-                                self.analyst._coin_list[coin_id].pop(self.exchange)
+                                if self.exchange in self.analyst.coin_list.get(coin_id, {}):
+                                    self.analyst._coin_list[coin_id].pop(self.exchange)
                                 
-                                try:
-                                    benefit = await self.analyst._coin_culc(coin_id)
-                                    
-                                    if benefit is not None:
-                                        self.analyst.sorted_coin[coin_id] = benefit
-                                except Exception as e:
-                                    self.analyst.logger.error(f"Error recalculating Coid ID = {coin_id}: {e}")
+                                    try:   
+                                        benefit = await self.analyst._coin_culc(coin_id)
+                                        
+                                        if benefit is not None:
+                                            self.analyst.sorted_coin[coin_id] = benefit
+                                    except Exception as e:
+                                        self.analyst.logger.error(f"Error recalculating Coid ID = {coin_id}: {e}")
                     else:
                         pass
                         # self.analyst.logger.error(f"Invalid price update for Coin ID = {coin_id} on {self.exchange}: {price}")

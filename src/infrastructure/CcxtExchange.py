@@ -11,7 +11,7 @@ from core.models.types import COIN_ID, DESTINATION, COIN_NAME, amount
 
 import asyncio
 from asyncio import Condition
-import ccxt.pro as ccxtpro
+import ccxt.pro  as ccxtpro
 import logging
 
 from core.services.Mapper import Mapper
@@ -52,6 +52,9 @@ class CcxtExchange(Exchange):
     async def start(self, coins: bidict[COIN_NAME, COIN_ID]) -> None:
         if self._is_running: return
         # self.logger.info(coins)
+        if 370 in coins.inverse:
+            coins.inverse.pop(370)
+        
         self.coins = coins
         
         self._is_running = True
@@ -62,6 +65,7 @@ class CcxtExchange(Exchange):
         
         coin_names = list(coins.keys())
         coin_names.remove("USDT")
+        # coin_names.remove("WAXP")
         
         try:
             self.logger.info(f"[{self.name}] Запуск мониторинга...")

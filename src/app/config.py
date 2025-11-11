@@ -4,10 +4,10 @@ import os
 load_dotenv()
 
 api_keys = {
-    # 'binance': {
-    #     'api_key': os.getenv('BINANCE_API_KEY'),
-    #     'api_secret': os.getenv('BINANCE_API_SECRET'),
-    # },
+    'binance': {
+        'api_key': os.getenv('BINANCE_API_KEY'),
+        'api_secret': os.getenv('BINANCE_API_SECRET'),
+    },
     'okx': {
         'api_key': os.getenv('OKX_API_KEY'),
         'api_secret': os.getenv('OKX_API_SECRET'),
