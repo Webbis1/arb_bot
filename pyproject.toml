@@ -6,7 +6,7 @@ authors = ["ar1ess <webbis@internet.ru>"]
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.12"
+python = "^3.10"
 ccxt = "^4.5.14"
 sortedcollections = "^2.1.0"
 python-dotenv = "^1.2.1"
