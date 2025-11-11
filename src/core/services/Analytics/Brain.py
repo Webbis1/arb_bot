@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from core.interfaces import Exchange
 from core.interfaces.Dto.Asset import Asset
 from core.models import Coin, CoinPair, Deal, Commission
+from core.models.types import FEE
 from core.services.Analytics.Analyst import Analyst
 from core.services.Mapper import Mapper
 
@@ -11,8 +12,8 @@ from core.services.Mapper import Mapper
 @dataclass
 class Brain:
     analyst: 'Analyst'
-    _commission: Commission
-    _coin_list: CoinPair
+    # _commission: Commission
+    # _coin_list: CoinPair
     mapper: Mapper
     _additive: float = 2.0
     _logger: logging.Logger = field(default_factory=lambda: logging.getLogger('Brain'))
@@ -21,10 +22,10 @@ class Brain:
     async def analyse(self, exchange: Exchange, asset: Asset) -> Recommendation:
         if asset.coin_id == self.mapper.usdt:
             return await self.__usdt_analyse(exchange, asset)
-        elif asset.coin_id in self._coin_list.inverse:
+        elif asset.coin_id in self.mapper.analyzed_coins:
             return await self.__other_analyse(exchange, asset)
         else:
-            self._logger.info(f"Coin ID = {asset.coin_id} not found in coin list")
+            self._logger.warning(f"Coin ID = {asset.coin_id} not found in coin list")
             sell: Trade = Trade(
                 buy_coin=self.mapper.usdt,
                 sell_coin=asset.coin_id,
@@ -44,28 +45,38 @@ class Brain:
             self._logger.info(f"Coin ID = {asset.coin_id} not found in coin list")
             return Wait(seconds=10)
         
-        coin: Coin | None = self._commission[deal.departure][deal.destination].get(coin_id)
+        deal_fee: FEE | None = self.mapper.get_fee(deal)
         
-        if coin is None: 
-            self._logger.info(f"Coin with id {coin_id} not found in commission list")
+        if deal_fee is None: 
+            self._logger.info(f"Coin with id {deal.coin_id} not found in commission list deal")
             return Wait(seconds=10)
         
-        profit: float = asset.amount * (1 + deal.benefit) - self._additive
+        if exchange != deal.departure:
+            usdt_fee: FEE | None = None
+            if coin := self.mapper.get_best_coin_transfer(exchange.name, deal.departure.name, coin_id): usdt_fee = coin.fee
         
-        if(profit >= coin.fee):
-            if exchange == deal.departure:
-                trade = Trade(
-                    buy_coin= deal.coin_id,
-                    sell_coin=coin_id,
-                )
-                return trade
-            else:
+            if usdt_fee is None: 
+                self._logger.info(f"Coin with id {str(coin_id)} not found in commission list usdt")
+                return Wait(seconds=10)
+            
+            profit: float = (asset.amount - usdt_fee) * (1 + deal.benefit) - self._additive
+        
+            if(profit >= deal_fee):
                 transfer = Transfer(
                     coin=coin_id,
                     departure=exchange,
                     destination=deal.destination,
                 )
                 return transfer
+        else:
+            profit: float = (asset.amount) * (1 + deal.benefit) - self._additive
+        
+            if(profit >= deal_fee):
+                trade = Trade(
+                    buy_coin= deal.coin_id,
+                    sell_coin=coin_id,
+                )
+                return trade
             
         return Wait(seconds=10)
     
@@ -88,15 +99,15 @@ class Brain:
             self._logger.info(f"Coin ID = {coin_id} not found in coin list")
             return sell
         
-        coin: Coin | None = self._commission[deal.departure][deal.destination].get(coin_id)
+        deal_fee: FEE | None = self.mapper.get_fee(deal)
         
-        if coin is None: 
+        if deal_fee is None: 
             self._logger.info(f"Coin with id {coin_id} not found in commission list")
             return sell
         
         profit: float = asset.amount * (1 + deal.benefit) - self._additive
         
-        if(profit >= coin.fee):   
+        if(profit >= deal_fee):   
             transfer = Transfer(
                 coin=coin_id,
                 departure=current_exchange,

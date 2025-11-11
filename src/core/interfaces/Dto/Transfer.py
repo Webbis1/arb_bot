@@ -11,3 +11,6 @@ class Transfer:
     departure: DEPARTURE
     destination: DESTINATION
     
+    def __str__(self) -> str:
+        return f"Transfer coin: {self.coin} from {self.departure} to {self.destination}"
+    

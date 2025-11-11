@@ -9,5 +9,8 @@ from core.models.types import COIN_ID
 class Trade:
     buy_coin: COIN_ID
     sell_coin: COIN_ID
+    
+    def __str__(self) -> str:
+        return f"Trade {self.sell_coin} to {self.buy_coin}"
 
     

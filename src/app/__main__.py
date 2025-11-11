@@ -2,13 +2,16 @@ import argparse
 import asyncio
 import gc
 import logging
+from typing import ValuesView
 
 from bidict import bidict
 
-from core.interfaces import ExFactory
-from core.interfaces.Dto import BuyCommission, ExchangeDict, SellCommission
+from core.interfaces import ExFactory, Exchange
+from core.interfaces.Dto import BuyCommission, ExchangeDict, Recommendation, SellCommission
+from core.interfaces.Dto.Asset import Asset
 from core.interfaces.Exceptions import ExchangeConnectionError
 from core.models import Coin, CoinPair, Commission, Deal
+from core.models.types import COIN_ID
 from core.services.Analytics.Analyst import Analyst
 from core.services.Analytics.Brain import Brain
 from core.services.Mapper import Mapper
@@ -16,7 +19,9 @@ from infrastructure.ExFactory import ExFactory as ExFactoryImpl
 from .config import api_keys as API
 # from core import ExFactory, ExchangeConnectionError, Coin
 
-logger = logging.getLogger('main')
+import sys
+
+logger = logging.getLogger(__name__)
 
 async def printAnal(analyst: Analyst):
     while True:
@@ -25,6 +30,16 @@ async def printAnal(analyst: Analyst):
             string: str = str(deal) + "\t" + analyst.mapper.get_coin_name_id_for_ex(deal.departure.name).inverse[deal.coin_id] + f" - coin in dict {len(analyst.coin_list)}"
             logger.info(string)
         
+        await asyncio.sleep(2)
+
+
+async def BrainTest(brain: Brain, exchanges: ValuesView[Exchange], usdt_id: COIN_ID):
+    logger.info(f"USDT_ID is {usdt_id}")
+    while True:
+        for ex in exchanges:
+            rec: Recommendation = await brain.analyse(ex, Asset(usdt_id, 100))
+            logger.info(f"Recomendation for {ex.name} is {str(rec)}")
+            
         await asyncio.sleep(2)
 
 async def main():
@@ -41,6 +56,8 @@ async def main():
             
             await mapper.generate_data(factory.values())
             
+            for ex in factory.values():
+                ex.set_coins_by_mapper(mapper.get_coin_name_id_for_ex(ex.name))
             
             tasks = [asyncio.create_task(ex.start(mapper.get_coin_name_id_for_ex(ex.name))) for ex in factory.values()]
             
@@ -48,7 +65,12 @@ async def main():
             
             await analyst.start()
             
-            tasks.append(asyncio.create_task(printAnal(analyst)))
+            brain: Brain = Brain(analyst, mapper)
+            
+            
+            
+            # tasks.append(asyncio.create_task(printAnal(analyst)))
+            tasks.append(asyncio.create_task(BrainTest(brain, factory.values(), mapper.usdt)))
             
             try:
                 done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)
@@ -104,6 +126,7 @@ async def main():
         logger.error(f"Другая ошибка: {e}")
 
 if __name__ == "__main__":
+    
     try:
         asyncio.run(main())
     except KeyboardInterrupt:

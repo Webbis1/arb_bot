@@ -2,11 +2,15 @@ import asyncio
 from typing import Any
 from core.interfaces.Dto import Coins
 from core.models import Coin
-from core.models.types import COIN_NAME
+from core.models.types import COIN_NAME, COIN_ID
 from infrastructure.CcxtExchange import CcxtExchange
-
+import ccxt.pro  as ccxtpro
 
 class KucoinExchange(CcxtExchange):
+    def __init__(self, name: str, instance: ccxtpro.Exchange):
+        super().__init__(name, instance)
+        self.prices_wallet: dict[COIN_ID, float] = dict()
+    
     async def get_current_coins(self) -> list[Coin]:
         markets = await self.instance.fetch_markets()
         currencies: dict | None= await self.instance.fetch_currencies()
@@ -35,9 +39,6 @@ class KucoinExchange(CcxtExchange):
                     
         return coins
 
-
-
-
     async def watch_tickers(self, coin_names: list[COIN_NAME]) -> None:
         coin_names = coin_names[:390]
         # self.logger.warning("start kucoin")
@@ -51,3 +52,36 @@ class KucoinExchange(CcxtExchange):
         
         # Ждем выполнения всех корутин
         await asyncio.gather(*coroutines, return_exceptions=True)
+        
+    async def _price_notify(self, coin_id: int, value: float):
+        for sub in self.price_subscribers:
+            try:
+                self.prices_wallet[coin_id] = value
+                asyncio.create_task(sub.on_price_update(coin_id, value))
+            except Exception as e:
+                self.logger.exception(f"Error notifying price subscriber: {e}")
+
+
+    async def sell(self, coin_id: int, quantity: float, usdt_name: str = 'USDT'):
+        coin_name = self.coins.inverse.get(coin_id)
+        
+        coin_price = self.ex.prices_wallet[coin_id]
+            
+        quantity = quantity / coin_price
+        
+        self.logger.info(f'Exchange = {self.name}, createMarkerOrder = {self.__ex.has['createMarketOrder']}, createMarketBuyOrderRequiresPrice = {self.__ex.options.get('createMarketBuyOrderRequiresPrice')}')
+        
+        # Можно ли торговать по рыночной цене
+        if (self.__ex.has['createMarketOrder']):                                 
+            symbol = f"{coin_name}/{usdt_name}"
+            try:
+                order = await self.__ex.create_order(symbol, 'market', 'sell', quantity)
+                filled_amount = order.get('filled', 0)
+                cost = order.get('cost', 0)
+                self.logger.info(f"Sell order filled: {filled_amount} {coin_name} for {cost} {usdt_name}")
+                return order
+            except Exception as e:
+                self.logger.error(f"Sell order failed for {symbol}: {e}")
+                return None
+        else:
+            self.logger.warning(f"Market sell is not supported on exchange {self.__ex.id}")

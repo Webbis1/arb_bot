@@ -9,7 +9,7 @@ from core.interfaces import ExchangeConnectionError, ExFactory as ExFactoryInter
 from infrastructure.CcxtExchange import CcxtExchange
 # from infrastructure.Exchenges.base_ccxt_exchange import CcxtExchange # Импортируем базовый класс
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+# logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +92,6 @@ class ExFactory(ExFactoryInterface):
             params.update({k: v for k, v in ex_config.items() if k not in ['api_key', 'api_secret', 'sandbox']})
 
             exchange = exchange_class(params)
-            # Присваиваем логгер для облегчения отладки в CcxtExchange
             exchange.original_logger = logging.getLogger(f'ccxtpro.{ex_name}')
             await exchange.load_markets()
             logger.debug(f"Markets loaded for {ex_name}.")
@@ -108,36 +107,36 @@ class ExFactory(ExFactoryInterface):
             logger.error(f"✗ {ex_name}: Unexpected error - {e}", exc_info=True)
         return None
 
-    async def check_balances(self, currency: str = 'USDT') -> None:
-        logger.info(f"Checking {currency} balances for all connected exchanges...")
-        tasks = [self._check_single_balance(ex.name, ex.instance, currency) for ex in self._exchanges.values()]
-        results: list[Union[float, BaseException]] = await asyncio.gather(*tasks, return_exceptions=True) # Исправлен тип
+    # async def check_balances(self, currency: str = 'USDT') -> None:
+    #     logger.info(f"Checking {currency} balances for all connected exchanges...")
+    #     tasks = [self._check_single_balance(ex.name, ex.instance, currency) for ex in self._exchanges.values()]
+    #     results: list[Union[float, BaseException]] = await asyncio.gather(*tasks, return_exceptions=True) # Исправлен тип
 
-        error_exchanges: list[str] = []
-        for i, (ex_name, result) in enumerate(zip(self._exchanges.keys(), results)):
-            if isinstance(result, BaseException): # Проверка на BaseException
-                error_exchanges.append(ex_name)
-                logger.error(f"✗ {ex_name}: error fetching balance - {result}", exc_info=True)
-            else:
-                balance = result
-                logger.debug(f"✓ {ex_name}: {currency} balance = {balance:.4f}")
+    #     error_exchanges: list[str] = []
+    #     for i, (ex_name, result) in enumerate(zip(self._exchanges.keys(), results)):
+    #         if isinstance(result, BaseException): # Проверка на BaseException
+    #             error_exchanges.append(ex_name)
+    #             logger.error(f"✗ {ex_name}: error fetching balance - {result}", exc_info=True)
+    #         else:
+    #             balance = result
+    #             logger.debug(f"✓ {ex_name}: {currency} balance = {balance:.4f}")
 
-        if error_exchanges:
-            raise ExchangeConnectionError(
-                f"Failed to fetch balances from: {', '.join(error_exchanges)}."
-            )
-        logger.info(f"{currency} balance check completed.")
+    #     if error_exchanges:
+    #         raise ExchangeConnectionError(
+    #             f"Failed to fetch balances from: {', '.join(error_exchanges)}."
+    #         )
+    #     logger.info(f"{currency} balance check completed.")
 
-    async def _check_single_balance(self, ex_name: str, exchange: ccxtpro.Exchange, currency: str) -> float:
-        balance_data = await exchange.fetch_balance()
-        total_balance = balance_data['total']
+    # async def _check_single_balance(self, ex_name: str, exchange: ccxtpro.Exchange, currency: str) -> float:
+    #     balance_data = await exchange.fetch_balance()
+    #     total_balance = balance_data['total']
 
-        currency_lower = currency.lower()
+    #     currency_lower = currency.lower()
 
-        for key in total_balance.keys():
-            if key.lower() == currency_lower:
-                return float(total_balance[key])
-        return 0.0
+    #     for key in total_balance.keys():
+    #         if key.lower() == currency_lower:
+    #             return float(total_balance[key])
+    #     return 0.0
 
     async def close(self) -> None:
         logger.info("Closing all exchange connections...")
@@ -152,7 +151,10 @@ class ExFactory(ExFactoryInterface):
 
     async def _close_single_exchange(self, ex_name: str, exchange: ccxtpro.Exchange) -> None:
         try:
-            await exchange.close()
+            if hasattr(exchange, 'close'):
+                await exchange.close()
+            elif hasattr(exchange, '__del__'):
+                exchange.__del__()
             logger.info(f"Exchange '{ex_name}' closed.")
         except asyncio.CancelledError:
             logger.debug(f"Exchange '{ex_name}': background tasks cancelled (expected for some exchanges).")
@@ -161,12 +163,19 @@ class ExFactory(ExFactoryInterface):
 
     async def __aenter__(self) -> 'ExFactory':
         await self.create_exchanges()
-        await self.check_balances()
+        # await self.check_balances()
         return self
 
     async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
-        if exc_type:
-            logger.error(f"Exiting ExFactory due to exception: {exc_val}", exc_info=(exc_type, exc_val, exc_tb))
+        if exc_type is asyncio.CancelledError:
+            logger.info("👋 ExFactory: Корректное завершение по запросу отмены")
+            # Не логируем как ошибку, это нормальная ситуация
+        elif exc_type:
+            logger.error(f"❌ ExFactory: Завершение из-за исключения: {exc_val}", 
+                        exc_info=(exc_type, exc_val, exc_tb))
+        else:
+            logger.info("✅ ExFactory: Успешное завершение работы")
+        
         await self.close()
 
     def __getitem__(self, ex_name: str) -> CcxtExchange:

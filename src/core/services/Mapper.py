@@ -8,7 +8,8 @@ from bidict import ValueDuplicationError, bidict
 from core.interfaces import Exchange
 from core.interfaces.Dto import Coins, ExchangeDict
 from core.models import Coin
-from core.models.types import COIN_ID, adress, EXCHANGE_NAME, COIN_NAME
+from core.models.Deal import Deal
+from core.models.types import COIN_ID, DEPARTURE_NAME, DESTINATION_NAME, FEE, adress, EXCHANGE_NAME, COIN_NAME
 
 logger = logging.getLogger(__name__)
 
@@ -17,14 +18,15 @@ class Mapper:
     def __init__(self):
         self.__name_iter: COIN_ID = 0
         self._all_coins: bidict[Coin, COIN_ID] = bidict()
+        self._ex_coins: dict[EXCHANGE_NAME, defaultdict[COIN_ID, set[Coin]]] = defaultdict(lambda: defaultdict(set))
     # all_ex: dict[str, set[Coin]]
     # all_adresess: dict[str, int]
     # actual_adresess: dict[str, int]
         self._all_coin_names: defaultdict[EXCHANGE_NAME, bidict[COIN_NAME, COIN_ID]] = defaultdict()
         # self._all_network_names: defaultdict[str, bidict[int, str]]
-    # _usdt: int | None = field(default = None)
+        self._usdt: int | None = None
 
-        self._best_transfer: defaultdict[str, dict[str, dict[int, Coin]]] = defaultdict(lambda: defaultdict(dict))
+        self._best_transfer: defaultdict[DEPARTURE_NAME, dict[DESTINATION_NAME, dict[COIN_ID, Coin]]] = defaultdict(lambda: defaultdict(dict))
         
         self._exchanges: dict[EXCHANGE_NAME, Exchange] = {}
     
@@ -54,7 +56,7 @@ class Mapper:
             
             
             for coin in coins:
-                if not coin.address or not coin.name: continue
+                if not coin.address or not coin.name or coin.fee < 0: continue
                 c_id: COIN_ID
 
                 if coin.name in current_exchange_name_id:
@@ -72,10 +74,33 @@ class Mapper:
                     else: current_exchange_name_id[coin.name] = c_id
                 
                 address_id[coin.address] = c_id
+                
+                self._ex_coins[ex.name][c_id].add(coin) 
 
                 # TODO: заполнение _all_coins
                 
             self._all_coin_names[ex.name] = current_exchange_name_id
+        
+        
+        for ex, data in self._ex_coins.items():
+            for ex2, data2 in self._ex_coins.items():
+                if ex == ex2: continue
+                common_coin_ids = set(data.keys()) & set(data2.keys())
+                
+                from pprint import pprint
+                
+                # pprint(common_coin_ids)
+        
+                for coin_id in common_coin_ids:
+                    intersection: set[Coin] = data2[coin_id] & data[coin_id]
+                    
+                    # pprint(intersection)
+                    if len(intersection):
+                        # print(min(intersection))
+                        self._best_transfer[ex][ex2][coin_id] = min(intersection)
+        
+        
+        # print(self.print_best_transfer())                     
             
         logger.info(f"Data generation completed. Generated {len(address_id)} unique coin addresses.")
 
@@ -87,7 +112,8 @@ class Mapper:
     
     def get_name(self): ...
     
-    def get_coinId_by_name_for_ex(self, ex_name: str) -> int: ...
+    def get_coinId_by_name_for_ex(self, ex_name: str, coin_name: COIN_NAME) -> int:
+        return self._all_coin_names[ex_name][coin_name]
     
     @property
     def all_coins(self) -> set[COIN_ID]:
@@ -126,7 +152,17 @@ class Mapper:
         return self._all_coin_names.get(ex_name, {}).get(coin_name)
     
     def get_best_coin_transfer(self, departure_name: str, destination_name: str, coin_id: int) -> Coin | None:
+        # logger.warning(f"from {departure_name} to {destination_name} with {coin_id}")
         return self._best_transfer.get(departure_name, {}).get(destination_name, {}).get(coin_id)
+    
+    def get_fee(self, deal: Deal, coin_id: COIN_ID | None = None) -> FEE | None:
+        if coin := self.get_best_coin_transfer(
+            deal.departure.name,
+            deal.destination.name, 
+            coin_id or deal.coin_id
+        ):
+            return coin.fee if coin.fee >= 0 else None
+        return None
     
     def get_all_coinname_by_ex(self, ex_name: str) -> set[str]:
         return set(self._all_coin_names.get(ex_name, {}).keys())
@@ -136,9 +172,39 @@ class Mapper:
         if self._usdt is None: 
             for _, names in self._all_coin_names.items():
                 if "USDT" in names.keys():
+                    # logger.warning(f"Mapper - usdt {names["USDT"]}")
                     self._usdt = names["USDT"]
                     break
+                
         if self._usdt is None:
             raise 
         
+        # logger.info(f"Mapper usdt is {self._usdt}")
+        
         return self._usdt
+    
+    
+    def print_best_transfer(self) -> str:
+        """Красивый вывод best_transfer в виде дерева"""
+        if not self._best_transfer:
+            return "No transfer data available"
+        
+        result = ["🏗️  Best Transfer Routes:"]
+        
+        for departure, destinations in self._best_transfer.items():
+            result.append(f"┌─ From: {departure}")
+            
+            dest_list = list(destinations.items())
+            for i, (destination, coins) in enumerate(dest_list):
+                prefix = "├─" if i < len(dest_list) - 1 else "└─"
+                result.append(f"{prefix} To: {destination}")
+                
+                coin_list = list(coins.items())
+                for j, (coin_id, coin) in enumerate(coin_list):
+                    sub_prefix = "│  ├─" if i < len(dest_list) - 1 else "   ├─"
+                    if j == len(coin_list) - 1:
+                        sub_prefix = "│  └─" if i < len(dest_list) - 1 else "   └─"
+                    
+                    result.append(f"{sub_prefix} Coin {coin_id}: {coin}")
+        
+        return "\n".join(result)

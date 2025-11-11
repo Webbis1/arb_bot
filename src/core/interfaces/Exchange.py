@@ -3,7 +3,7 @@ from typing import Optional
 
 # from core.interfaces import CoinDict, Coins
 from core.models import Coin, Exchange as ExchangeModel
-from core.models.types import COIN_NAME
+from core.models.types import COIN_ID, COIN_NAME
 from core.protocols import BalanceSubscriber, PriceSubscriber
 
 from core.interfaces.Dto import CoinDict, DESTINATION
@@ -35,9 +35,9 @@ class Exchange(ABC, ExchangeModel):
     
     #Trader
     @abstractmethod
-    async def sell(self, coin: Coin, amount: float) -> None: ...
+    async def sell(self, coin: COIN_ID, amount: float) -> None: ...
     @abstractmethod
-    async def buy(self, coin: Coin, amount: float) -> None: ...
+    async def buy(self, coin: COIN_ID, amount: float) -> None: ...
     
     @abstractmethod
     async def get_deposit_address(self, coin: Coin) -> str: ...
