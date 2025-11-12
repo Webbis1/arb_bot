@@ -41,63 +41,89 @@ class Mapper:
 
         logger.info("Starting data generation for exchanges.")
         
-        for ex in exchanges:
-            logger.debug(f"Processing exchange: {ex.name}")
+        for departure in exchanges:
+            logger.debug(f"Processing exchange: {departure.name}")
             current_exchange_name_id: bidict[COIN_NAME, COIN_ID] = bidict()
-            coins: list[Coin] = await ex.get_current_coins()
+            coins: dict[COIN_NAME, set[Coin]] = await departure.get_current_coins()
             
             
             if not coins:
-                logger.warning(f"No coins returned from {ex.name}. Skipping.")
+                logger.warning(f"No coins returned from {departure.name}. Skipping.")
                 continue
 
-            self._all_coin_names[ex.name] = bidict()
-            self._exchanges[ex.name] = ex
+            self._all_coin_names[departure.name] = bidict()
+            self._exchanges[departure.name] = departure
             
             
-            for coin in coins:
-                if not coin.address or not coin.name or coin.fee < 0: continue
-                c_id: COIN_ID
-
-                if coin.name in current_exchange_name_id:
-                    c_id = current_exchange_name_id[coin.name]
-                    logger.debug(f"Found existing ID {c_id} for coin name '{coin.name}' in {ex.name}'s name_id.")
-                elif coin.address in address_id:
-                    c_id = address_id[coin.address]
-                    logger.debug(f"Found existing ID {c_id} for coin address '{coin.address}' in global address_id.")
-                else:
-                    c_id = self.next_id
-                    logger.debug(f"Generated new ID {c_id} for coin '{coin.name}' (address: '{coin.address}').")
-
-                if coin.name not in current_exchange_name_id: 
-                    if c_id in current_exchange_name_id.inverse: logger.debug(f"ex - {ex.name}, name - {coin.name}, address - {coin.address} | in arr {current_exchange_name_id.inverse[c_id]}")
-                    else: current_exchange_name_id[coin.name] = c_id
+            for coin_name, coin_set in coins.items():
+                c_id: COIN_ID = self.next_id
+                normal_coins = set()
+                for coin in coin_set:
+                    if not coin.address or not coin.name or coin.fee < 0 or coin.chain == "Aptos" or coin.chain == "ETH" or coin.chain == "ERC20":
+                        continue
+                    else: normal_coins.add(coin)
+                        
+                    if coin.address in address_id:
+                        c_id = address_id[coin.address]
+                        logger.debug(f"Found existing ID {c_id} for coin address '{coin.address}' in global address_id.")
+                        break
                 
-                address_id[coin.address] = c_id
+                if coin_name not in current_exchange_name_id: 
+                    if c_id in current_exchange_name_id.inverse: logger.debug(f"ex - {departure.name}, name - {coin.name}, address - {coin.address} | in arr {current_exchange_name_id.inverse[c_id]}")
+                    else: current_exchange_name_id[coin_name] = c_id
                 
-                self._ex_coins[ex.name][c_id].add(coin) 
+                for coin in normal_coins:
+                    address_id[coin.address] = c_id
+                    self._ex_coins[departure.name][c_id].add(coin) 
+                
+                if coin_name == 'USDT':
+                    logger.critical(f"USDT - {c_id} for {departure.name}")
 
                 # TODO: заполнение _all_coins
                 
-            self._all_coin_names[ex.name] = current_exchange_name_id
+            self._all_coin_names[departure.name] = current_exchange_name_id
         
+        def intersection_with_priority(set1: set[Coin], set2: set[Coin]) -> set[Coin]:
+            """Пересечение множеств с приоритетом объектов из set1"""
+            result = set()
+            
+            for coin1 in set1:
+                for coin2 in set2:
+                    if coin1 == coin2:  # Используем перегруженный __eq__
+                        result.add(coin1)  # Добавляем экземпляр из set1
+                        break
+            
+            return result
         
-        for ex, data in self._ex_coins.items():
-            for ex2, data2 in self._ex_coins.items():
-                if ex == ex2: continue
+        for departure_name, data in self._ex_coins.items():
+            for destination_name, data2 in self._ex_coins.items():
+                if departure_name == destination_name: continue
                 common_coin_ids = set(data.keys()) & set(data2.keys())
                 
                 from pprint import pprint
                 
                 # pprint(common_coin_ids)
-        
+                print(departure_name + "    ----    " + destination_name)
                 for coin_id in common_coin_ids:
-                    intersection: set[Coin] = data2[coin_id] & data[coin_id]
                     
-                    # pprint(intersection)
+                    intersection: set[Coin] = intersection_with_priority(data2[coin_id], data[coin_id])
+                    
+                    # if coin_id == self.usdt and departure_name == 'kucoin' and destination_name == 'okx':
+                    #     print('from - ' +  destination_name)
+                    #     pprint(data2[coin_id])
+                    #     print('================')
+                        
+                    #     print('from - ' + departure_name)
+                    #     pprint(data[coin_id])
+                    #     print('================')
+                        
+                    #     print('Intersection: ')
+                    #     pprint(intersection)
+                    
+                    
                     if len(intersection):
                         # print(min(intersection))
-                        self._best_transfer[ex][ex2][coin_id] = min(intersection)
+                        self._best_transfer[departure_name][destination_name][coin_id] = min(intersection)
         
         
         # print(self.print_best_transfer())                     
@@ -177,7 +203,7 @@ class Mapper:
                     break
                 
         if self._usdt is None:
-            raise 
+            raise Exception("USDT not init")
         
         # logger.info(f"Mapper usdt is {self._usdt}")
         

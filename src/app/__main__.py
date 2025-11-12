@@ -18,6 +18,7 @@ from core.services.Mapper import Mapper
 from infrastructure.ExFactory import ExFactory as ExFactoryImpl
 from .config import api_keys as API
 # from core import ExFactory, ExchangeConnectionError, Coin
+from core.services.Execution.Manager import Manager
 
 import sys
 
@@ -68,9 +69,14 @@ async def main():
             brain: Brain = Brain(analyst, mapper)
             
             
+            managers: list[Manager] = [Manager(brain, ex) for ex in factory.values()]
+            
+            manager_tasks = [asyncio.create_task(manager.start()) for manager in managers]
+            
+            tasks.extend(manager_tasks)
             
             # tasks.append(asyncio.create_task(printAnal(analyst)))
-            tasks.append(asyncio.create_task(BrainTest(brain, factory.values(), mapper.usdt)))
+            # tasks.append(asyncio.create_task(BrainTest(brain, factory.values(), mapper.usdt)))
             
             try:
                 done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)

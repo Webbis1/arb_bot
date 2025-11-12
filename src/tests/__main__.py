@@ -12,11 +12,14 @@ import asyncio
 from asyncio import Condition
 import ccxt.pro as ccxtpro
 import logging
+import traceback
 
 from app.config import api_keys as API
 
 from core.services.Mapper import Mapper
 from infrastructure.Exchenges.kucoin import KucoinExchange
+
+logger = logging.getLogger(__name__)
 
 class ExchangeService(BalanceSubscriber, PriceSubscriber):
     def __init__(self, ex: Exchange):
@@ -58,6 +61,10 @@ class ExchangeService(BalanceSubscriber, PriceSubscriber):
         self.logger.info(f'Buying Coin Id = {coin_id} on Exchange = {self.ex.name} is started')        
         await self.ex.buy(coin_id, quantity)
         
+    async def withdraw(self, coin: Coin, amount: float, ex_destination: DESTINATION , tag: str = ''):
+        self.logger.info(f'Withdraw from Exchange {self.ex.name} to Exchange {ex_destination.name} is started')
+        await self.ex.withdraw(coin, amount, ex_destination, tag)
+        
         
 async def main():
     try:
@@ -70,7 +77,6 @@ async def main():
             
             for ex in factory.values():
                 ex.set_coins_by_mapper(mapper.get_coin_name_id_for_ex(ex.name))
-<<<<<<< HEAD
             
             tasks = [asyncio.create_task(ex.start(mapper.get_coin_name_id_for_ex(ex.name))) for ex in factory.values()]
             
@@ -87,7 +93,7 @@ async def main():
                 
             await asyncio.gather(*balance_subscribers_tasks, *price_subscribers_tasks)
             
-            await asyncio.sleep(10)            
+            #await asyncio.sleep(10)            
             
             ### Продажа (Bitget - БВ, Okx - БВ, Kucoin - БВ) ###    
             # for ex in factory.values():
@@ -98,68 +104,67 @@ async def main():
             
             
             ### Покупка (Bitget - в USDT, Okx - в USDT, Kucoin - БВ) ###
+            # for ex in factory.values():
+            #     if (ex.name == 'kucoin'):
+            #         ex_service = ExchangeService(ex)
+            #         coin_id = mapper.get_coinId_by_name_for_ex(ex.name, 'CELR')
+            #         await ex_service.buy(coin_id, 1.0)
+            
+            ### Перевод ###
             for ex in factory.values():
                 if (ex.name == 'kucoin'):
                     ex_service = ExchangeService(ex)
-                    coin_id = mapper.get_coinId_by_name_for_ex(ex.name, 'CELR')
-                    await ex_service.buy(coin_id, 1.0)
-            
-            done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)
-            
-=======
-            
-            tasks = [asyncio.create_task(ex.start(mapper.get_coin_name_id_for_ex(ex.name))) for ex in factory.values()]
-            
-            for ex in factory.values():
-                ex_service = ExchangeService(ex)
-                print(ex.name)
-                await ex_service.sell(1, 0)
-            
-            
-            # balance_subscribers_tasks = []
-            # price_subscribers_tasks = []
-            
-            # for ex in factory.values():                
-            #     ex_service = ExchangeService(ex)
-                                
-            #     balance_subscribers_tasks.append(asyncio.create_task(ex_service.start_balance_observe()))
-            #     #price_subscribers_tasks.append(asyncio.create_task(ex_service.start_price_observe()))                 
-            
-                
-            # await asyncio.gather(*balance_subscribers_tasks, *price_subscribers_tasks)
-            
-            done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)
-            
-            # try:
-            #     done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)
-                
-            #     print('fafasdfsdsafasdf')
-                
-            #     for task in done:
-            #         if task.exception():
-            #             print(f"Task failed: {task.exception()}")
+                    ex_destination_name = 'okx'                    
                     
+                    if (ex_destination := factory.get_exchange_obj_by_name(ex_destination_name)):      
+                        coin_id = mapper.get_coinId_by_name_for_ex(ex.name, 'USDT')
+                        
+                        if coin := mapper.get_best_coin_transfer(ex.name, ex_destination_name, coin_id):
+                            for coin_id, set_coins in mapper._ex_coins[ex.name].items():
+                                for mapper_coin in set_coins:
+                                    if mapper_coin.address == coin.address:
+                                        print(f'Mapper intersection coin Exchange = {ex.name}: {mapper_coin.chain}')
+                            
+                            for coin_id, set_coins in mapper._ex_coins[ex_destination_name].items():
+                                for mapper_coin in set_coins:
+                                    if mapper_coin.address == coin.address:
+                                        print(f'Mapper intersection coin Exchange = {ex_destination_name}: {mapper_coin.chain}')
+                            
+                            #await ex_service.withdraw(coin, 12, ex_destination)
+                            
+                        else: 
+                            print(f'Невозможно перевести монету {coin_id} из биржы {ex.name} на биржу {ex_destination_name}')
+                            
+                        if coin := mapper.get_best_coin_transfer(ex_destination_name, ex.name, coin_id):
+                            print(coin)
+                        
+                            
+                    else:
+                        print(f"Неизвестная биржа назначения перевода: {ex_destination_name}")
+                                        
+            
+            try:
+                done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)
+                
+                for task in done:
+                    if task.exception():
+                        logger.error(f"Task failed: {task.exception()}")
+                        
 
-            #     for task in pending:
-            #         task.cancel()
+                for task in pending:
+                    task.cancel()
                     
-            # except KeyboardInterrupt:
-            #     print("Received interrupt signal, shutting down...")
+            except KeyboardInterrupt:
+                logger.info("Received interrupt signal, shutting down...")
                 
-            #     # Отменяем все задачи
-            #     for task in tasks:
-            #         task.cancel()
-                    
-            #     # for bst in balance_subscribers_tasks:
-            #     #     bst.cancel()
-                    
-            #     # for pct in price_subscribers_tasks:
-            #     #     pct.cancel()
+                # Отменяем все задачи
+                for task in tasks:
+                    task.cancel()
                 
-            #     await asyncio.gather(*tasks, return_exceptions=True)
+                await asyncio.gather(*tasks, return_exceptions=True)
                 
-            #     print("Shutdown complete")
->>>>>>> origin/main
+                logger.info("Shutdown complete")
+            
             
             
     except ExchangeConnectionError as e:
@@ -167,6 +172,8 @@ async def main():
     except KeyboardInterrupt:
         print("Программа остановлена пользователем")
     except Exception as e:
+        traceback.print_exc()
+
         print(f"Другая ошибка: {e}")
     
 if __name__ == '__main__':

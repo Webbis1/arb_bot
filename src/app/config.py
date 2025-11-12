@@ -52,10 +52,10 @@ setup_logging()
 
 
 api_keys = {
-    'binance': {
-        'api_key': os.getenv('BINANCE_API_KEY'),
-        'api_secret': os.getenv('BINANCE_API_SECRET'),
-    },
+    # 'binance': {
+    #     'api_key': os.getenv('BINANCE_API_KEY'),
+    #     'api_secret': os.getenv('BINANCE_API_SECRET'),
+    # },
     'okx': {
         'api_key': os.getenv('OKX_API_KEY'),
         'api_secret': os.getenv('OKX_API_SECRET'),
@@ -73,6 +73,9 @@ api_keys = {
         'api_key': os.getenv('KUCOIN_API_KEY'),
         'api_secret': os.getenv('KUCOIN_API_SECRET'),
         'password': os.getenv('KUCOIN_PASSWORD'),
+        # 'urls': {
+        #     'api': 'https://www.kucoin.com'
+        # }
     },
     'htx': {
         'api_key': os.getenv('HTX_API_KEY'),

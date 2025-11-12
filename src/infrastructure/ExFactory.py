@@ -169,10 +169,8 @@ class ExFactory(ExFactoryInterface):
     async def __aexit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
         if exc_type is asyncio.CancelledError:
             logger.info("👋 ExFactory: Корректное завершение по запросу отмены")
-            # Не логируем как ошибку, это нормальная ситуация
         elif exc_type:
-            logger.error(f"❌ ExFactory: Завершение из-за исключения: {exc_val}", 
-                        exc_info=(exc_type, exc_val, exc_tb))
+            logger.error(f"❌ ExFactory: Непредвиденная ошибка", exc_info=True)
         else:
             logger.info("✅ ExFactory: Успешное завершение работы")
         
@@ -197,6 +195,9 @@ class ExFactory(ExFactoryInterface):
 
     def keys(self) -> KeysView[str]:
         return self._exchanges.keys()
+    
+    def get_exchange_obj_by_name(self, ex_name: str) -> Exchange | None:
+        return self._exchanges.get(ex_name, None)
 
     @property
     def connected_exchanges(self) -> list[CcxtExchange]:

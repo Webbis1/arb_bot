@@ -9,14 +9,14 @@ from collections import defaultdict
 
 
 class HtxExchange(CcxtExchange):    
-    async def get_current_coins(self) -> list[Coin]:
+    async def get_current_coins(self) -> dict[COIN_NAME, set[Coin]]:
         markets = await self.instance.fetch_markets()
         currencies: dict | None= await self.instance.fetch_currencies()
         if not currencies:
             self.logger.warning(f"No currencies fetched from {self.name}.")
-            return []
+            return {}
         
-        coins: list[Coin] = []
+        coins: defaultdict[COIN_NAME, set[Coin]] = defaultdict(lambda: set())
         
         for coin_name, item in currencies.items():
             if coin_name != "USDT":
@@ -44,7 +44,7 @@ class HtxExchange(CcxtExchange):
                     except (ValueError, TypeError):
                         fee = -1
                 coin: Coin = Coin(_address = address, name=coin_name, chain=chain, fee=fee)
-                coins.append(coin)
+                coins[coin_name].add(coin)
                     
         return coins
  

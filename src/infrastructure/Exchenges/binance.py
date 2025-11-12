@@ -1,17 +1,18 @@
 from core.interfaces.Dto import Coins
 from core.models import Coin
+from core.models.types import COIN_NAME
 from infrastructure.CcxtExchange import CcxtExchange
-
+from collections import defaultdict
 
 class BinanceExchange(CcxtExchange):
-    async def get_current_coins(self) -> list[Coin]:
+    async def get_current_coins(self) -> dict[COIN_NAME, set[Coin]]:
         markets = await self.instance.fetch_markets()
         currencies: dict | None= await self.instance.fetch_currencies()
         if not currencies:
             self.logger.warning(f"No currencies fetched from {self.name}.")
-            return []
+            return {}
         
-        coins: list[Coin] = []
+        coins: defaultdict[COIN_NAME, set[Coin]] = defaultdict(lambda: set())
         
         for coin_name, item in currencies.items():
             if coin_name != "USDT":
@@ -21,14 +22,14 @@ class BinanceExchange(CcxtExchange):
             networkList = item['info']['networkList']
             for net in networkList:
                 chain = net['network']
-                if chain == "ETH":
+                if chain == "ETH" or chain == "ERC20":
                     continue     
                 if 'contractAddress' not in net or not net['contractAddress']: address = f'{coin_name}_{chain}'
                 else: address = net['contractAddress']
             
                 fee = float(net['withdrawFee'])
                 coin: Coin = Coin(_address = address, name=coin_name, chain=chain, fee=fee)
-                coins.append(coin)
+                coins[coin_name].add(coin)
                     
         return coins
     

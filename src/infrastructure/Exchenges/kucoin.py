@@ -5,20 +5,21 @@ from core.models import Coin
 from core.models.types import COIN_NAME, COIN_ID
 from infrastructure.CcxtExchange import CcxtExchange
 import ccxt.pro  as ccxtpro
+from collections import defaultdict
 
 class KucoinExchange(CcxtExchange):
     def __init__(self, name: str, instance: ccxtpro.Exchange):
         super().__init__(name, instance)
         self.prices_wallet: dict[COIN_ID, float] = dict()
     
-    async def get_current_coins(self) -> list[Coin]:
+    async def get_current_coins(self) -> dict[COIN_NAME, set[Coin]]:
         markets = await self.instance.fetch_markets()
         currencies: dict | None= await self.instance.fetch_currencies()
         if not currencies:
             self.logger.warning(f"No currencies fetched from {self.name}.")
-            return []
+            return {}
         
-        coins: list[Coin] = []
+        coins: defaultdict[COIN_NAME, set[Coin]] = defaultdict(lambda: set())
         
         for coin_name, item in currencies.items():
             if coin_name != "USDT":
@@ -35,7 +36,7 @@ class KucoinExchange(CcxtExchange):
             
                 fee = float(net['withdrawalMinFee']) if net['withdrawalMinFee'] is not None else -1
                 coin: Coin = Coin(_address = address, name=coin_name, chain=chain, fee=fee)
-                coins.append(coin)
+                coins[coin_name].add(coin)
                     
         return coins
 
@@ -65,12 +66,10 @@ class KucoinExchange(CcxtExchange):
     async def sell(self, coin_id: int, quantity: float, usdt_name: str = 'USDT'):
         coin_name = self.coins.inverse.get(coin_id)
         
-        coin_price = self.ex.prices_wallet[coin_id]
+        coin_price = self.prices_wallet[coin_id]
             
         quantity = quantity / coin_price
-        
-        self.logger.info(f'Exchange = {self.name}, createMarkerOrder = {self.__ex.has['createMarketOrder']}, createMarketBuyOrderRequiresPrice = {self.__ex.options.get('createMarketBuyOrderRequiresPrice')}')
-        
+                
         # Можно ли торговать по рыночной цене
         if (self.__ex.has['createMarketOrder']):                                 
             symbol = f"{coin_name}/{usdt_name}"
