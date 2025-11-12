@@ -22,6 +22,14 @@ class HtxExchange(CcxtExchange):
             if coin_name != "USDT":
                 trades_with_usdt = await self._is_trading_with_usdt(markets, coin_name)
                 if not trades_with_usdt: continue
+            
+            self.logger.info(f"check {coin_name}")
+            
+            deposit_addresses_fetch_results = await self.instance.fetch_deposit_addresses_by_network(coin_name)
+            deposit_addresses = set()
+            
+            for net, net_data in deposit_addresses_fetch_results.items():                
+                deposit_addresses.add(net_data['info']['chain'])
                 
             networkList = item['info']['chains']
             for net in networkList:
@@ -31,20 +39,24 @@ class HtxExchange(CcxtExchange):
                 if 'contractAddress' not in net or not net['contractAddress']: address = f'{coin_name}_{chain}'
                 else: address = net['contractAddress']
             
-                fee = -1 
-                if 'transactFeeWithdraw' in net and net['transactFeeWithdraw'] is not None:
-                    try:
-                        fee = float(net['transactFeeWithdraw'])
-                    except (ValueError, TypeError):
-                        fee = -1
-                # Альтернативные поля для комиссии, если основное отсутствует
-                elif 'withdrawFee' in net and net['withdrawFee'] is not None:
-                    try:
-                        fee = float(net['withdrawFee'])
-                    except (ValueError, TypeError):
-                        fee = -1
-                coin: Coin = Coin(_address = address, name=coin_name, chain=chain, fee=fee)
-                coins[coin_name].add(coin)
+                if (chain in deposit_addresses):
+                    fee = -1 
+                    if 'transactFeeWithdraw' in net and net['transactFeeWithdraw'] is not None:
+                        try:
+                            fee = float(net['transactFeeWithdraw'])
+                        except (ValueError, TypeError):
+                            fee = -1
+                    # Альтернативные поля для комиссии, если основное отсутствует
+                    elif 'withdrawFee' in net and net['withdrawFee'] is not None:
+                        try:
+                            fee = float(net['withdrawFee'])
+                        except (ValueError, TypeError):
+                            fee = -1
+                    coin: Coin = Coin(_address = address, name=coin_name, chain=chain, fee=fee)
+                    coins[coin_name].add(coin)
+                
+                else:
+                    continue
                     
         return coins
  

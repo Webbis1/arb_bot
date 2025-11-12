@@ -42,7 +42,8 @@ class ExchangeService(BalanceSubscriber, PriceSubscriber):
         await self.ex.unsubscribe_balance(self)
         self.logger.info(f'Balance observe was stoped: Exchange = {self.ex.name}')
         
-    async def on_price_update(self, coin: int, value: float) -> None: ...
+    async def on_price_update(self, coin: int, value: float) -> None:
+        pass
         #self.logger.info(f'Price was updated: Exchange = {self.ex.name}, Coin ID = {coin}, Value = {value}')
         
     async def start_price_observe(self):
@@ -55,15 +56,27 @@ class ExchangeService(BalanceSubscriber, PriceSubscriber):
         
     async def sell(self, coin_id: COIN_ID, quantity: float, usdt_name: str = 'USDT'):
         self.logger.info(f'Selling Coin Id = {coin_id} on Exchange = {self.ex.name} is started')
-        await self.ex.sell(coin_id, quantity)
+        
+        try:
+            await self.ex.sell(coin_id, quantity)
+        except Exception as e:
+            self.logger.error(f'Selling Coin Id = {coin_id} on Exchange = {self.ex.name} error: {e} ')
         
     async def buy(self, coin_id: COIN_ID, quantity: float, usdt_name: COIN_NAME = 'USDT'):
-        self.logger.info(f'Buying Coin Id = {coin_id} on Exchange = {self.ex.name} is started')        
-        await self.ex.buy(coin_id, quantity)
+        self.logger.info(f'Buying Coin Id = {coin_id} on Exchange = {self.ex.name} is started')   
         
-    async def withdraw(self, coin: Coin, amount: float, ex_destination: DESTINATION , tag: str = ''):
+        try:     
+            await self.ex.buy(coin_id, quantity)
+        except Exception as e:
+            self.logger.error(f'Buying Coin Id = {coin_id} on Exchange = {self.ex.name} error: {e} ')
+        
+    async def withdraw(self, coin_name: str, chain: str, amount: float, ex_destination: DESTINATION , tag: str = ''):
         self.logger.info(f'Withdraw from Exchange {self.ex.name} to Exchange {ex_destination.name} is started')
-        await self.ex.withdraw(coin, amount, ex_destination, tag)
+        
+        try:
+            await self.ex.withdraw(coin_name, chain, amount, ex_destination, tag)
+        except Exception as e:
+            self.logger.error(f'Withdraw from Exchange {self.ex.name} to Exchange {ex_destination.name} error: {e}')
         
         
 async def main():
@@ -80,6 +93,7 @@ async def main():
             
             tasks = [asyncio.create_task(ex.start(mapper.get_coin_name_id_for_ex(ex.name))) for ex in factory.values()]
             
+            
             ### Подписка ###
             balance_subscribers_tasks = []
             price_subscribers_tasks = []
@@ -95,53 +109,52 @@ async def main():
             
             #await asyncio.sleep(10)            
             
-            ### Продажа (Bitget - БВ, Okx - БВ, Kucoin - БВ) ###    
+            ### Продажа (Bitget - БВ, Okx - БВ, Kucoin - БВ, HTX - БВ) ###    
             # for ex in factory.values():
-            #     if (ex.name == 'kucoin'):                
-            #         ex_service = ExchangeService(ex)
-            #         coin_id = mapper.get_coinId_by_name_for_ex(ex.name, 'CELR')
-            #         await ex_service.sell(coin_id, 171)
+            #     if (ex.name == 'htx'):                
+            #         ex_service = ExchangeService(ex)                    
+            #         coin_name = 'BTC'
+                    
+            #         if (coin_id := mapper.get_coinId_by_name_for_ex(ex.name, coin_name)):    
+            #             await ex_service.sell(coin_id, 0.00004776)
+            #         else:
+            #             print(f'Монета {coin_name} не найдена в mapper для биржы {ex.name}')
             
             
-            ### Покупка (Bitget - в USDT, Okx - в USDT, Kucoin - БВ) ###
+            ### Покупка (Bitget - в USDT, Okx - в USDT, Kucoin - БВ, Htx - USDT) ###
             # for ex in factory.values():
-            #     if (ex.name == 'kucoin'):
+            #     if (ex.name == 'htx'):
             #         ex_service = ExchangeService(ex)
-            #         coin_id = mapper.get_coinId_by_name_for_ex(ex.name, 'CELR')
-            #         await ex_service.buy(coin_id, 1.0)
+            #         coin_name = 'BTC'
+            #         if coin_id := mapper.get_coinId_by_name_for_ex(ex.name, coin_name):
+            #             await ex_service.buy(coin_id, 5.0)
+            #         else:
+            #             print(f'Монета {coin_name} не найдена в mapper для биржы {ex.name}')
+            
             
             ### Перевод ###
             for ex in factory.values():
-                if (ex.name == 'kucoin'):
+                if (ex.name == 'bitget'):
                     ex_service = ExchangeService(ex)
-                    ex_destination_name = 'okx'                    
+                    ex_destination_name = 'kucoin'    
+                    
+                    coin_name = 'USDT'                
                     
                     if (ex_destination := factory.get_exchange_obj_by_name(ex_destination_name)):      
-                        coin_id = mapper.get_coinId_by_name_for_ex(ex.name, 'USDT')
-                        
-                        if coin := mapper.get_best_coin_transfer(ex.name, ex_destination_name, coin_id):
-                            for coin_id, set_coins in mapper._ex_coins[ex.name].items():
-                                for mapper_coin in set_coins:
-                                    if mapper_coin.address == coin.address:
-                                        print(f'Mapper intersection coin Exchange = {ex.name}: {mapper_coin.chain}')
-                            
-                            for coin_id, set_coins in mapper._ex_coins[ex_destination_name].items():
-                                for mapper_coin in set_coins:
-                                    if mapper_coin.address == coin.address:
-                                        print(f'Mapper intersection coin Exchange = {ex_destination_name}: {mapper_coin.chain}')
-                            
-                            #await ex_service.withdraw(coin, 12, ex_destination)
-                            
-                        else: 
-                            print(f'Невозможно перевести монету {coin_id} из биржы {ex.name} на биржу {ex_destination_name}')
-                            
-                        if coin := mapper.get_best_coin_transfer(ex_destination_name, ex.name, coin_id):
-                            print(coin)
-                        
+                        if coin_id := mapper.get_coinId_by_name_for_ex(ex.name, coin_name):
+                            if coin := mapper.get_best_coin_transfer(ex.name, ex_destination_name, coin_id):                                
+                                if coin_data := mapper.get_coin_name_chain_from_ex_by_address(coin.address, ex_destination): 
+                                    print(f'COIN DATA FROM MAPPER: {coin_data} Address: {coin.address}')                         
+                                    await ex_service.withdraw(coin_data[0], coin_data[1], 12, ex_destination)
+                                
+                            else: 
+                                print(f'Невозможно перевести монету {coin_id} из биржы {ex.name} на биржу {ex_destination_name}')
+                                
+                        else:
+                            print(f'Не удалось получить монету {coin_name} на бирже {ex.name}')
                             
                     else:
-                        print(f"Неизвестная биржа назначения перевода: {ex_destination_name}")
-                                        
+                        print(f"Неизвестная биржа назначения перевода: {ex_destination_name}")    
             
             try:
                 done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_EXCEPTION)

@@ -6,7 +6,7 @@ from core.interfaces import Exchange
 # from core.interfaces.Dto import CoinDict, Coins, Destination
 from core.models import Coin
 from core.protocols import BalanceSubscriber, PriceSubscriber
-from core.models.types import COIN_ID, DESTINATION, COIN_NAME, amount
+from core.models.types import COIN_ID, DESTINATION, COIN_NAME, amount, CHAIN
 
 
 import asyncio
@@ -215,8 +215,15 @@ class CcxtExchange(Exchange):
     
     #Trader
     
-    async def buy(self, coin_id: int, usdt_quantity: float, usdt_name: str = 'USDT'):
-        coin_name = self.coins.inverse.get(coin_id)
+    async def buy(self, coin_id: int, usdt_quantity: float | None = None, usdt_name: str = 'USDT'):
+        if coin_id not in self.coins.inverse:
+            self.logger.warning(f"coin - {coin_id} not support for buy")
+            
+        if usdt_quantity is None:
+            async with self.__coin_locks[self.coins[usdt_name]]:
+                usdt_quantity = self.wallet[self.coins[usdt_name]]
+        
+        coin_name: COIN_NAME = self.coins.inverse[coin_id]
         
         # self.logger.info(f'Exchange = {self.name}, createMarkerOrder = {self.__ex.has['createMarketOrder']}, createMarketBuyOrderRequiresPrice = {self.__ex.options.get('createMarketBuyOrderRequiresPrice')}')
 
@@ -236,8 +243,18 @@ class CcxtExchange(Exchange):
         else:
             self.logger.warning(f"Market sell is not supported on exchange {self.__ex.id}")
     
-    async def sell(self, coin_id: int, quantity: float, usdt_name: str = 'USDT'):
-        coin_name = self.coins.inverse.get(coin_id)
+    async def sell(self, coin_id: int, quantity: float | None = None, usdt_name: str = 'USDT'):
+        if coin_id not in self.coins.inverse:
+            self.logger.warning(f"coin - {coin_id} not support for sell")
+        
+        coin_name: COIN_NAME = self.coins.inverse[coin_id]
+        
+        if coin_name == usdt_name:
+            return None
+        
+        if quantity is None:
+            async with self.__coin_locks[coin_id]:
+                quantity = self.wallet[coin_id]
         
         # self.logger.info(f'Exchange = {self.name}, createMarkerOrder = {self.__ex.has['createMarketOrder']}, createMarketBuyOrderRequiresPrice = {self.__ex.options.get('createMarketBuyOrderRequiresPrice')}')
         
@@ -257,26 +274,21 @@ class CcxtExchange(Exchange):
             self.logger.warning(f"Market sell is not supported on exchange {self.__ex.id}")
     
     # Courier
-    async def get_deposit_address(self, coin: Coin) -> str | None:        
-        try:
-            coin_name = coin.name
-            chain = coin.chain
-            
+    async def get_deposit_address(self, coin_name: str, chain: str) -> str | None:        
+        try:            
             params = {
                 'network': chain,
                 'chain': chain
             }
             
-            # address_info = await self.__ex.fetchDepositAddressesByNetwork(coin_name) #type: ignore
+            # address_info_total = await self.__ex.fetchDepositAddressesByNetwork(coin_name) #type: ignore
+            #self.logger.critical(f'INFO: {address_info_total}')
+            # from pprint import pprint 
+            # pprint(address_info_total)
+            
             address_info = await self.__ex.fetch_deposit_address(coin_name, params)
             
-            address = None
-            
-            # self.logger.critical(f'INFO: {address_info}')
-            
-            # from pprint import pprint 
-            
-            # pprint(address_info)
+            address = None           
             
             if isinstance(address_info, dict):
                 self.logger.info(f'TAGS: {address_info}')
@@ -303,29 +315,26 @@ class CcxtExchange(Exchange):
             return None
     
     
-    async def withdraw(self, coin: Coin, amount: float, ex_destination: DESTINATION , tag: str = '') -> None:
-        coin_name = coin.name
-        chain = coin.chain
-        
-        self.logger.critical(chain)
-        
-        address = await ex_destination.get_deposit_address(coin)
-        
-        self.logger.info(f'Withdraw deposit address: {address}')
-             
-        params = {
-            'network': chain,
-            'chain': chain
-        }
-        
-        self.logger.info(f'Withdraw params: {params}')
-        
-        try:
-            withdraw_result = await self.instance.withdraw(coin_name, amount, address, tag=tag, params=params)
-            self.logger.info(f'Withdraw Result: {withdraw_result}')
+    async def withdraw(self, coin_name: str, chain: str, amount: float, ex_destination: DESTINATION , tag: str = '') -> None:                
+        if address := await ex_destination.get_deposit_address(coin_name, chain):        
+            self.logger.info(f'Withdraw deposit address: {address}')
+                
+            params = {
+                'network': chain,
+                'chain': chain
+            }
             
-        except Exception as e:
-            self.logger.error(f'Withdraw error: {e}')
+            self.logger.info(f'Withdraw params: {params}')
+            
+            # try:
+            #     withdraw_result = await self.instance.withdraw(coin_name, amount, address, tag=tag, params=params)
+            #     self.logger.info(f'Withdraw Result: {withdraw_result}')
+                
+            # except Exception as e:
+            #     self.logger.error(f'Withdraw error: {e}')
+        
+        else:
+            self.logger.error(f'Cannot fetch deposit address on Exchange = {self.name}, Coin = {coin_name}, Chain = {chain}')
 
     async def get_current_coins(self) -> dict[COIN_NAME, set[Coin]]:
         # loge NotImplementedError
@@ -333,3 +342,6 @@ class CcxtExchange(Exchange):
         
     def set_coins_by_mapper(self, coins: bidict[COIN_NAME, COIN_ID]):
         self.coins = coins
+        
+        
+# if coin_name, chain := mapper.get...

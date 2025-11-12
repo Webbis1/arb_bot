@@ -8,6 +8,7 @@ COIN_ID: TypeAlias = int
 PROFIT: TypeAlias = float
 PRICE: TypeAlias = float
 FEE: TypeAlias = float
+CHAIN: TypeAlias = str
 
 BALANCE: TypeAlias = float
 
@@ -18,7 +19,7 @@ DEPARTURE_NAME: TypeAlias = EXCHANGE_NAME
 DESTINATION_NAME: TypeAlias = EXCHANGE_NAME
 
 
-adress: TypeAlias = str
+ADDRESS: TypeAlias = str
 DEPARTURE: TypeAlias = Exchange 
 """Биржа отправления"""
 DESTINATION: TypeAlias = Exchange

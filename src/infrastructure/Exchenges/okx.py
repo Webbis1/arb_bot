@@ -18,8 +18,18 @@ class OkxExchange(CcxtExchange):
             if coin_name != "USDT":
                 trades_with_usdt = await self._is_trading_with_usdt(markets, coin_name)
                 if not trades_with_usdt: continue
+            
+            self.logger.info(f"check {coin_name}")
+               
+            deposit_addresses_fetch_results = await self.instance.fetch_deposit_addresses_by_network(coin_name)
+            deposit_addresses = set()
+            
+            for net, net_data in deposit_addresses_fetch_results.items():                
+                deposit_addresses.add(net_data['info']['ctAddr'])
+                
                 
             networkList = item['info']
+            
             for net in networkList:
                 chain = net['chain']
                 chain = chain[5:]
@@ -29,9 +39,13 @@ class OkxExchange(CcxtExchange):
                     continue     
                 if 'ctAddr' not in net or not net['ctAddr']: address = f'{coin_name}_{chain}'
                 else: address = net['ctAddr']
-            
-                fee = float(net['fee']) if net['fee'] is not None else -1
-                coin: Coin = Coin(_address = address, name=coin_name, chain=chain, fee=fee)
-                coins[coin_name].add(coin)
+                
+                if (address in deposit_addresses):                
+                    fee = float(net['fee']) if net['fee'] is not None else -1
+                    coin: Coin = Coin(_address = address, name=coin_name, chain=chain, fee=fee)
+                    coins[coin_name].add(coin)
+                    
+                else:
+                    continue
                     
         return coins

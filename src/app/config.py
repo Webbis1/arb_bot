@@ -80,5 +80,8 @@ api_keys = {
     'htx': {
         'api_key': os.getenv('HTX_API_KEY'),
         'api_secret': os.getenv('HTX_API_SECRET'),
+        'options': {
+            'createMarketBuyOrderRequiresPrice': False,
+        },
     }
 }

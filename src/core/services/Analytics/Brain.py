@@ -51,7 +51,7 @@ class Brain:
             self._logger.info(f"Coin with id {deal.coin_id} not found in commission list deal")
             return Wait(seconds=10)
         
-        if exchange != deal.departure:
+        if exchange is deal.departure:
             usdt_fee: FEE | None = None
             if coin := self.mapper.get_best_coin_transfer(exchange.name, deal.departure.name, coin_id): usdt_fee = coin.fee
         

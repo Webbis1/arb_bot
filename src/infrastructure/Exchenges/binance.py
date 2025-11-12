@@ -19,6 +19,11 @@ class BinanceExchange(CcxtExchange):
                 trades_with_usdt = await self._is_trading_with_usdt(markets, coin_name)
                 if not trades_with_usdt: continue
                 
+            deposit_addresses_fetch_results = await self.instance.fetch_deposit_addresses_by_network(coin_name)
+            from pprint import pprint 
+            print('BINANCE:')
+            pprint(deposit_addresses_fetch_results)
+                
             networkList = item['info']['networkList']
             for net in networkList:
                 chain = net['network']

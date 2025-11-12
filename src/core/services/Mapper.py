@@ -1,3 +1,4 @@
+import asyncio
 from collections import defaultdict
 from dataclasses import dataclass, field
 import logging
@@ -9,7 +10,7 @@ from core.interfaces import Exchange
 from core.interfaces.Dto import Coins, ExchangeDict
 from core.models import Coin
 from core.models.Deal import Deal
-from core.models.types import COIN_ID, DEPARTURE_NAME, DESTINATION_NAME, FEE, adress, EXCHANGE_NAME, COIN_NAME
+from core.models.types import CHAIN, COIN_ID, DEPARTURE_NAME, DESTINATION_NAME, FEE, ADDRESS, EXCHANGE_NAME, COIN_NAME
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +20,7 @@ class Mapper:
         self.__name_iter: COIN_ID = 0
         self._all_coins: bidict[Coin, COIN_ID] = bidict()
         self._ex_coins: dict[EXCHANGE_NAME, defaultdict[COIN_ID, set[Coin]]] = defaultdict(lambda: defaultdict(set))
+        self._ex_coin_dict: defaultdict[EXCHANGE_NAME, dict[ADDRESS, tuple[COIN_NAME, CHAIN]]] = defaultdict(dict)
     # all_ex: dict[str, set[Coin]]
     # all_adresess: dict[str, int]
     # actual_adresess: dict[str, int]
@@ -41,10 +43,28 @@ class Mapper:
 
         logger.info("Starting data generation for exchanges.")
         
+        # Создаем задачи для всех exchanges
+        tasks = []
         for departure in exchanges:
-            logger.debug(f"Processing exchange: {departure.name}")
-            current_exchange_name_id: bidict[COIN_NAME, COIN_ID] = bidict()
-            coins: dict[COIN_NAME, set[Coin]] = await departure.get_current_coins()
+            logger.debug(f"Creating task for exchange: {departure.name}")
+            task = asyncio.create_task(departure.get_current_coins())
+            tasks.append((departure, task))
+
+        # Ждем завершения всех задач
+        results = []
+        for departure, task in tasks:
+            try:
+                coins = await task
+                results.append((departure, coins))
+            except Exception as e:
+                logger.error(f"Error getting coins from {departure.name}: {e}")
+                results.append((departure, None))
+
+        # Обрабатываем результаты
+        for departure, coins in results:
+            if coins is not None:
+                logger.debug(f"Processing exchange: {departure.name}")
+                current_exchange_name_id: bidict[COIN_NAME, COIN_ID] = bidict()
             
             
             if not coins:
@@ -53,11 +73,11 @@ class Mapper:
 
             self._all_coin_names[departure.name] = bidict()
             self._exchanges[departure.name] = departure
-            
+            self._ex_coin_dict[departure.name] = {}
             
             for coin_name, coin_set in coins.items():
                 c_id: COIN_ID = self.next_id
-                normal_coins = set()
+                normal_coins: set[Coin] = set()
                 for coin in coin_set:
                     if not coin.address or not coin.name or coin.fee < 0 or coin.chain == "Aptos" or coin.chain == "ETH" or coin.chain == "ERC20":
                         continue
@@ -75,6 +95,7 @@ class Mapper:
                 for coin in normal_coins:
                     address_id[coin.address] = c_id
                     self._ex_coins[departure.name][c_id].add(coin) 
+                    self._ex_coin_dict[departure.name][coin.address] = coin.name, coin.chain
                 
                 if coin_name == 'USDT':
                     logger.critical(f"USDT - {c_id} for {departure.name}")
@@ -134,12 +155,13 @@ class Mapper:
     def get_coinID(self): ...
     # name + ex
     
-    def get_coin(self): ...
+    def get_coin_name_chain_from_ex_by_address(self, address: str, ex: Exchange) -> tuple[COIN_NAME, CHAIN] | None:
+        return self._ex_coin_dict.get(ex.name, {}).get(address)
     
     def get_name(self): ...
     
-    def get_coinId_by_name_for_ex(self, ex_name: str, coin_name: COIN_NAME) -> int:
-        return self._all_coin_names[ex_name][coin_name]
+    def get_coinId_by_name_for_ex(self, ex_name: str, coin_name: COIN_NAME) -> int | None:
+        return self._all_coin_names.get(ex_name, {}).get(coin_name)
     
     @property
     def all_coins(self) -> set[COIN_ID]:
