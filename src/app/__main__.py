@@ -55,7 +55,11 @@ async def main():
             
             mapper: Mapper = Mapper() 
             
-            await mapper.generate_data(factory.values())
+            # await mapper.generate_data(factory.values())
+            # mapper.save('mapper_data.pkl')
+            
+            mapper.load('mapper_data.pkl')
+            
             
             for ex in factory.values():
                 ex.set_coins_by_mapper(mapper.get_coin_name_id_for_ex(ex.name))
@@ -64,7 +68,7 @@ async def main():
             
             analyst: Analyst = Analyst(mapper)
             
-            await analyst.start()
+            await analyst.start(set(factory.connected_exchanges))
             
             brain: Brain = Brain(analyst, mapper)
             

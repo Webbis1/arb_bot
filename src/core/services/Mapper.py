@@ -2,6 +2,7 @@ import asyncio
 from collections import defaultdict
 from dataclasses import dataclass, field
 import logging
+import pickle
 from typing import ValuesView 
 
 from bidict import ValueDuplicationError, bidict
@@ -21,16 +22,12 @@ class Mapper:
         self._all_coins: bidict[Coin, COIN_ID] = bidict()
         self._ex_coins: dict[EXCHANGE_NAME, defaultdict[COIN_ID, set[Coin]]] = defaultdict(lambda: defaultdict(set))
         self._ex_coin_dict: defaultdict[EXCHANGE_NAME, dict[ADDRESS, tuple[COIN_NAME, CHAIN]]] = defaultdict(dict)
-    # all_ex: dict[str, set[Coin]]
-    # all_adresess: dict[str, int]
-    # actual_adresess: dict[str, int]
+
         self._all_coin_names: defaultdict[EXCHANGE_NAME, bidict[COIN_NAME, COIN_ID]] = defaultdict()
-        # self._all_network_names: defaultdict[str, bidict[int, str]]
         self._usdt: int | None = None
 
         self._best_transfer: defaultdict[DEPARTURE_NAME, dict[DESTINATION_NAME, dict[COIN_ID, Coin]]] = defaultdict(lambda: defaultdict(dict))
         
-        self._exchanges: dict[EXCHANGE_NAME, Exchange] = {}
     
     @property
     def next_id(self) -> COIN_ID:
@@ -72,7 +69,7 @@ class Mapper:
                 continue
 
             self._all_coin_names[departure.name] = bidict()
-            self._exchanges[departure.name] = departure
+            # self._exchanges[departure.name] = departure
             self._ex_coin_dict[departure.name] = {}
             
             for coin_name, coin_set in coins.items():
@@ -186,9 +183,9 @@ class Mapper:
         return analyzed_coins
         
     
-    @property
-    def exchange_set(self) -> set[Exchange]:
-        return set(self._exchanges.values())
+    # @property
+    # def exchange_set(self) -> set[Exchange]:
+    #     return set(self._exchanges.values())
     
     def get_coin_id(self, coin: Coin) -> int | None:
         return self._all_coins.get(coin, None)
@@ -256,3 +253,62 @@ class Mapper:
                     result.append(f"{sub_prefix} Coin {coin_id}: {coin}")
         
         return "\n".join(result)
+    
+    
+    
+    
+    def save(self, filename: str) -> None:
+        """
+        Сохраняет состояние объекта Mapper в файл
+        
+        Args:
+            filename (str): Имя файла для сохранения
+        """
+        # Создаем словарь с данными для сохранения
+        data = {
+            '_Mapper__name_iter': self.__name_iter,
+            '_all_coins': self._all_coins,
+            '_ex_coins': dict(self._ex_coins),  # Преобразуем defaultdict в dict
+            '_ex_coin_dict': dict(self._ex_coin_dict),  # Преобразуем defaultdict в dict
+            '_all_coin_names': dict(self._all_coin_names),  # Преобразуем defaultdict в dict
+            '_usdt': self._usdt,
+            '_best_transfer': dict(self._best_transfer)  # Преобразуем defaultdict в dict
+        }
+        
+        with open(filename, 'wb') as f:
+            pickle.dump(data, f)
+    
+    def load(self, filename: str) -> None:
+        """
+        Загружает состояние объекта Mapper из файла
+        
+        Args:
+            filename (str): Имя файла для загрузки
+        """
+        try:
+            with open(filename, 'rb') as f:
+                data = pickle.load(f)
+            
+            # Восстанавливаем атрибуты
+            self.__name_iter = data['_Mapper__name_iter']
+            self._all_coins = data['_all_coins']
+            
+            # Восстанавливаем defaultdict с правильными фабричными функциями
+            self._ex_coins = defaultdict(lambda: defaultdict(set))
+            self._ex_coins.update(data['_ex_coins'])
+            
+            self._ex_coin_dict = defaultdict(dict)
+            self._ex_coin_dict.update(data['_ex_coin_dict'])
+            
+            self._all_coin_names = defaultdict(bidict)
+            self._all_coin_names.update(data['_all_coin_names'])
+            
+            self._usdt = data['_usdt']
+            
+            self._best_transfer = defaultdict(lambda: defaultdict(dict))
+            self._best_transfer.update(data['_best_transfer'])
+            
+        except FileNotFoundError:
+            print(f"Файл {filename} не найден")
+        except Exception as e:
+            print(f"Ошибка при загрузке данных: {e}")

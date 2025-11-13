@@ -68,7 +68,8 @@ class CcxtExchange(Exchange):
             await self._process_balance_update(new_balances)
             
             coin_names = list(coins.keys())
-            coin_names.remove("USDT")
+            if "USDT" in coin_names:
+                coin_names.remove("USDT")
             
             self.logger.info(f"[{self.name}] Запуск мониторинга...")
             

@@ -108,10 +108,10 @@ class Analyst:
                 all_prices[exchange][coin_id] = price
         return all_prices
     
-    async def start(self):
+    async def start(self, exchanges: set[Exchange]):
         self.logger.info("Starting data collection")
         
-        for exchange in self.mapper.exchange_set:
+        for exchange in exchanges:
             self.logger.info(exchange)
             
             @dataclass

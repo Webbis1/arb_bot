@@ -77,8 +77,18 @@ class KucoinExchange(CcxtExchange):
                 self.logger.exception(f"Error notifying price subscriber: {e}")
 
 
-    async def sell(self, coin_id: int, quantity: float, usdt_name: str = 'USDT'):
-        coin_name = self.coins.inverse.get(coin_id)
+    async def sell(self, coin_id: int, quantity: float | None = None, usdt_name: str = 'USDT'):
+        if coin_id not in self.coins.inverse:
+            self.logger.warning(f"coin - {coin_id} not support for sell")
+        
+        coin_name: COIN_NAME = self.coins.inverse[coin_id]
+        
+        if coin_name == usdt_name:
+            return None
+        
+        if quantity is None:
+            async with self.__coin_locks[coin_id]:
+                quantity = self.wallet[coin_id]
         
         coin_price = self.prices_wallet[coin_id]
             
