@@ -55,17 +55,17 @@ class Exchange:
                     return None
                 
                 # Ошибки недостатка средств
-                except ccxt.InsufficientFunds as e:
-                    self.logger.error(f"Insufficient funds: {type(e).__name__}: {str(e)}")
-                    # Требует пополнения баланса
-                    return None
+                # except ccxt.InsufficientFunds as e:
+                #     self.logger.error(f"Insufficient funds: {type(e).__name__}: {str(e)}")
+                #     # Требует пополнения баланса
+                #     return None
                 
                 # Ошибки валидации ордеров
-                except (ccxt.InvalidOrder, ccxt.OrderNotFound, 
-                        ccxt.InvalidAddress, ccxt.AddressPending) as e:
-                    self.logger.error(f"Order validation error: {type(e).__name__}: {str(e)}")
-                    # Проблема с параметрами ордера
-                    return None
+                # except (ccxt.InvalidOrder, ccxt.OrderNotFound, 
+                #         ccxt.InvalidAddress, ccxt.AddressPending) as e:
+                #     self.logger.error(f"Order validation error: {type(e).__name__}: {str(e)}")
+                #     # Проблема с параметрами ордера
+                #     return None
                 
                 # Ошибки аргументов
                 except (TypeError, ValueError, AttributeError, KeyError) as e:
@@ -74,9 +74,9 @@ class Exchange:
                     return None
                 
                 # Ошибки отмены
-                except asyncio.CancelledError:
-                    self.logger.warning("Operation cancelled")
-                    raise  # Пробрасываем дальше, т.к. это нормальное завершение
+                # except asyncio.CancelledError:
+                #     self.logger.warning("Operation cancelled")
+                #     raise  # Пробрасываем дальше, т.к. это нормальное завершение
                 
                 # Общие ошибки биржи
                 except ccxt.ExchangeError as e:
@@ -85,14 +85,14 @@ class Exchange:
                     return None
                 
                 # Неизвестные ошибки CCXT
-                except ccxt.BaseError as e:
-                    self.logger.error(f"Unknown CCXT error: {type(e).__name__}: {str(e)}")
-                    return None
+                # except ccxt.BaseError as e:
+                #     self.logger.error(f"Unknown CCXT error: {type(e).__name__}: {str(e)}")
+                #     return None
                 
                 # Все остальные непредвиденные ошибки
-                except Exception as e:
-                    self.logger.error(f"Unexpected error: {type(e).__name__}: {str(e)}")
-                    return None
+                # except Exception as e:
+                #     self.logger.error(f"Unexpected error: {type(e).__name__}: {str(e)}")
+                #     return None
 
             return wrapper
         return decorator
