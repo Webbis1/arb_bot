@@ -12,7 +12,7 @@ CHAIN: TypeAlias = str
 
 BALANCE: TypeAlias = float
 
-amount: TypeAlias = float
+AMOUNT: TypeAlias = float
 EXCHANGE_NAME: TypeAlias = str
 
 DEPARTURE_NAME: TypeAlias = EXCHANGE_NAME

@@ -9,7 +9,7 @@ from .Wait import Wait
 
 # from core.models.types import *
 
-from core.models.types import COIN_ID, DEPARTURE, DESTINATION, COIN_NAME, amount, EXCHANGE_NAME
+from core.models.types import COIN_ID, DEPARTURE, DESTINATION, COIN_NAME, AMOUNT, EXCHANGE_NAME
 
 Recommendation: TypeAlias = Trade | Transfer | Wait
 Coins = set[Coin]

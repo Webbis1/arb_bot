@@ -26,7 +26,10 @@ class Manager(BalanceSubscriber):
         
 
     async def start(self):
+        # await asyncio.sleep(5)
+        self.logger.info(f"{self.ex.name} прогружена")
         await self.ex.subscribe_balance(self)
+        # coin_dict = await self.ex.get_balance()
     
     async def _get_lock(self, coin_id: COIN_ID) -> asyncio.Lock:
         if coin_id not in self.locks:
@@ -61,23 +64,23 @@ class Manager(BalanceSubscriber):
             await self.set_pending_coin(asset.coin_id, asset.amount)
             await self.postponed_consultation(seconds, asset.coin_id)
         elif isinstance(rec, Trade):
-            if rec.sell_coin == self.mapper.usdt: await self.ex.buy(rec.sell_coin)
-            else: await self.ex.sell(rec.buy_coin)
+            if rec.sell_coin == self.mapper.usdt: await self.ex.buy(rec.buy_coin)
+            else: await self.ex.sell(rec.sell_coin)
             await self.remove_pending_coin(asset.coin_id)  # Очистка после действия
         elif isinstance(rec, Transfer):
             coin_id: COIN_ID = rec.coin
             departure: DEPARTURE = rec.departure
             destination: DESTINATION = rec.destination
-            if self.ex is departure:
-                if coin := self.mapper.get_best_coin_transfer(self.ex.name, destination.name,coin_id):
-                    coin_name = coin.name
-                    chain = coin.chain
-                    await self.ex.withdraw(coin_name, chain, asset.amount, destination)
-                else:
-                    self.logger.error(f"невозможно выполнить перевод {rec}")
-                    await self.ex.sell(rec.coin)
+            transfer_result: bool = False
+            if self.ex is not departure: self.logger.error(f"перевод с биржи на саму себя {rec}")
+            elif coin := self.mapper.get_best_coin_transfer(self.ex.name, destination.name,coin_id):
+                coin_name = coin.name
+                chain = coin.chain
+                transfer_result = await self.ex.withdraw(coin_name, chain, asset.amount, destination)
             else:
-                self.logger.error(f"перевод с биржи на саму себя {rec}")
+                self.logger.error(f"невозможно выполнить перевод {rec}")
+                    # await self.ex.sell(rec.coin)
+            if not transfer_result:    
                 await self.ex.sell(rec.coin)
                 
             await self.remove_pending_coin(asset.coin_id)  # Очистка после действия

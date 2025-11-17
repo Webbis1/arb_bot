@@ -4,7 +4,7 @@ from typing import Optional, Any
 from core.interfaces import Exchange
 from core.models import Coin
 from core.protocols import BalanceSubscriber, PriceSubscriber
-from core.models.types import COIN_ID, DESTINATION, COIN_NAME, amount
+from core.models.types import COIN_ID, DESTINATION, COIN_NAME, AMOUNT
 from core.interfaces.Exceptions import ExchangeConnectionError
 from core.interfaces import ExFactory
 from infrastructure.ExFactory import ExFactory as ExFactoryImpl

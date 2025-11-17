@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from frozendict import frozendict
 # from asyncio import Queue
 from asyncio import Condition
-from core.models.types import COIN_ID, COIN_NAME, PRICE, amount, PROFIT
+from core.models.types import COIN_ID, COIN_NAME, PRICE, AMOUNT, PROFIT
 
 import asyncio
 import logging
@@ -112,7 +112,7 @@ class Analyst:
         self.logger.info("Starting data collection")
         
         for exchange in exchanges:
-            self.logger.info(exchange)
+            # self.logger.info(exchange)
             
             @dataclass
             class Subscriber(PriceSubscriber):

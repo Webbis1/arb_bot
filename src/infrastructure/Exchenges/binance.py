@@ -1,41 +1,37 @@
 from core.interfaces.Dto import Coins
-from core.models import Coin
+# from core.models import Coin
+from core.models.Coins import Coin, CoinCreateError
 from core.models.types import COIN_NAME
 from infrastructure.CcxtExchange import CcxtExchange
 from collections import defaultdict
 
 class BinanceExchange(CcxtExchange):
-    async def get_current_coins(self) -> dict[COIN_NAME, set[Coin]]:
-        markets = await self.instance.fetch_markets()
-        currencies: dict | None= await self.instance.fetch_currencies()
-        if not currencies:
-            self.logger.warning(f"No currencies fetched from {self.name}.")
-            return {}
-        
-        coins: defaultdict[COIN_NAME, set[Coin]] = defaultdict(lambda: set())
-        
-        for coin_name, item in currencies.items():
-            if coin_name != "USDT":
-                trades_with_usdt = await self._is_trading_with_usdt(markets, coin_name)
-                if not trades_with_usdt: continue
+    
+    def convert_currency(self, currency: dict[str, dict]) -> list[Coin]:
+        coin_list: list[Coin] = []
+        for data in currency.values():
+            if coin_name := data.get('code'):
+                for network in data.get('networks', {}).values():
+                    if network.get('active') and network.get('deposit') and network.get('withdraw'):
+                        chain = network.get('id')
+                        fee = network.get('fee')
+                        min_amount = network.get('limits', {}).get('withdraw', {}).get('min')
+                        address = network.get('info', {}).get('contractAddress')
+                        try:
+                            coin: Coin = Coin(address, coin_name, chain, fee, min_amount)
+                            coin_list.append(coin)
+                        except CoinCreateError:
+                            continue
+        return coin_list
                 
-            deposit_addresses_fetch_results = await self.instance.fetch_deposit_addresses_by_network(coin_name)
-            from pprint import pprint 
-            print('BINANCE:')
-            pprint(deposit_addresses_fetch_results)
-                
-            networkList = item['info']['networkList']
-            for net in networkList:
-                chain = net['network']
-                if chain == "ETH" or chain == "ERC20":
-                    continue     
-                if 'contractAddress' not in net or not net['contractAddress']: address = f'{coin_name}_{chain}'
-                else: address = net['contractAddress']
-            
-                fee = float(net['withdrawFee'])
-                coin: Coin = Coin(_address = address, name=coin_name, chain=chain, fee=fee)
-                coins[coin_name].add(coin)
+    
+    async def get_current_coins(self):
+        coin_list: list[Coin] = []
+        
+        if currencies := self.instance.currencies:
+            coin_list = self.convert_currency(currencies)
+    
                     
-        return coins
+        return coin_list
     
     

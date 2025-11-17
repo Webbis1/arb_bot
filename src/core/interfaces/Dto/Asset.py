@@ -2,7 +2,7 @@ from typing import TypedDict
 from dataclasses import Field, dataclass
 from core.models import Coin
 
-from core.models.types import COIN_ID, COIN_NAME, amount
+from core.models.types import COIN_ID, COIN_NAME, AMOUNT
 
 @dataclass
 class Asset():

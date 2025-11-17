@@ -70,6 +70,9 @@ async def main():
             
             await analyst.start(set(factory.connected_exchanges))
             
+            # await asyncio.sleep(5)
+            # logger.info("Прогрузили биржи")
+            
             brain: Brain = Brain(analyst, mapper)
             
             

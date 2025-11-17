@@ -2,11 +2,14 @@ from abc import abstractmethod
 from bidict import bidict
 from typing import Optional, Any
 
+import ccxt
+
 from core.interfaces import Exchange
 # from core.interfaces.Dto import CoinDict, Coins, Destination
-from core.models import Coin
+# from core.models import Coin
+from core.models.Coins import  Coin
 from core.protocols import BalanceSubscriber, PriceSubscriber
-from core.models.types import COIN_ID, DESTINATION, COIN_NAME, amount, CHAIN
+from core.models.types import COIN_ID, DESTINATION, COIN_NAME, AMOUNT, CHAIN
 
 
 import asyncio
@@ -17,20 +20,18 @@ import logging
 from core.services.Mapper import Mapper
 
 
-
+# этот класс ничего не должен знать о COIN_ID
 class CcxtExchange(Exchange):
     
     def __init__(self, name: str, instance: ccxtpro.Exchange):
         super().__init__(name)
         self.__ex: ccxtpro.Exchange = instance
         self._is_running = False
-        self.wallet: dict[COIN_ID, amount] = {}
+        
         self.balance_sudscribers: set[BalanceSubscriber] = set()
         self.price_subscribers: set[PriceSubscriber] = set()
-        self.__coin_locks: dict[COIN_ID, asyncio.Lock] = {}
+        self.__coin_locks: dict[COIN_NAME, asyncio.Lock] = {}
         self.logger = logging.getLogger(f'CcxtExchange.{name}')
-        self.coins: bidict[COIN_NAME, COIN_ID] = bidict()
-        self.usdt_id: COIN_ID
     
     @property
     def instance(self) -> ccxtpro.Exchange:
@@ -38,7 +39,6 @@ class CcxtExchange(Exchange):
     
     async def _is_trading_with_usdt(self, markets, coin_name):
         try:
-            # 2025-11-10 09:12:38,308 - CcxtExchange.bitget - INFO - [bitget] Error: bitget does not have market symbol MITO/USDT
             for market in markets:
                 if (market['base'] == coin_name and 
                     market['quote'] == 'USDT' and 
@@ -49,7 +49,7 @@ class CcxtExchange(Exchange):
             print(f"Ошибка при проверке торговых пар: {e}")
             return False
     
-    async def start(self, coins: bidict[COIN_NAME, COIN_ID]) -> None:
+    async def start(self) -> None:
         if self._is_running: 
             return
         
@@ -64,7 +64,7 @@ class CcxtExchange(Exchange):
                 self.wallet[coin_id] = 0.0
                 self.__coin_locks[coin_id] = asyncio.Lock()
             
-            new_balances = await self.__ex.fetch_balance()
+            new_balances = await self.instance.fetch_balance()
             await self._process_balance_update(new_balances)
             
             coin_names = list(coins.keys())
@@ -75,6 +75,10 @@ class CcxtExchange(Exchange):
             
             # Создаем задачи с возможностью отмены
             tickers_task = asyncio.create_task(self.watch_tickers(coin_names))
+            
+            await asyncio.sleep(5)
+            self.logger.info("EX is load")
+            
             balance_task = asyncio.create_task(self._balance_observe())
             
             try:
@@ -133,7 +137,7 @@ class CcxtExchange(Exchange):
                         if (price == 0):
                             self.logger.warning(f"There is not fee data for Coin {coin_name} in exchange {self.name}")
                         
-                        await self._price_notify(self.coins[coin_name], price)
+                        await self._price_notify(coin_name, price)
                     
                 except asyncio.CancelledError:
                     self.logger.debug(f"Observation cancelled for {self.name}")
@@ -145,10 +149,10 @@ class CcxtExchange(Exchange):
         except Exception as e:
             self.logger.exception(f"Fatal error: {e}")
     
-    async def _price_notify(self, coin_id: int, value: float):
+    async def _price_notify(self, coin_name: str, value: float):
         for sub in self.price_subscribers:
             try:
-                asyncio.create_task(sub.on_price_update(coin_id, value))
+                asyncio.create_task(sub.on_price_update(coin_name, value))
             except Exception as e:
                 self.logger.exception(f"Error notifying price subscriber: {e}")
 
@@ -160,10 +164,10 @@ class CcxtExchange(Exchange):
         self.price_subscribers.discard(sub)
     
     # Balance observer
-    async def _balance_notify(self, coin_id: COIN_ID, value: float):
+    async def _balance_notify(self, coin_name: str, value: float):
         for sub in self.balance_sudscribers:
             try:
-                asyncio.create_task(sub.on_balance_update(coin_id, value))
+                asyncio.create_task(sub.on_balance_update(coin_name, value))
             except Exception as e:
                 self.logger.exception(f"Error notifying price subscriber: {e}")
     
@@ -174,15 +178,15 @@ class CcxtExchange(Exchange):
                     #self.logger.exception(f"[{self.name}] - coin: {coin_name}")
                     continue
                     
-                coin_id: COIN_ID = self.coins[coin_name]
+                # coin_id: COIN_ID = self.coins[coin_name]
                 
-                if (new_balance < 10e-9):
+                if (new_balance < 10e-6):
                     new_balance = 0
                     
-                async with self.__coin_locks[coin_id]:
-                    if (self.wallet[coin_id] != new_balance):
-                        self.wallet[coin_id] = new_balance
-                        asyncio.create_task(self._balance_notify(coin_id, new_balance))
+                async with self.__coin_locks[coin_name]:
+                    if (self.wallet[coin_name] != new_balance):
+                        self.wallet[coin_name] = new_balance
+                        asyncio.create_task(self._balance_notify(coin_name, new_balance))
                         
         except Exception as e:
             self.logger.exception(f"Error processing balance update: {e}")
@@ -191,7 +195,7 @@ class CcxtExchange(Exchange):
         try:    
             while self._is_running:
                 try:
-                    balance_update = await self.__ex.watch_balance()
+                    balance_update = await self.instance.watch_balance()
                     await self._process_balance_update(balance_update)
                     
                 except asyncio.CancelledError:
@@ -211,131 +215,143 @@ class CcxtExchange(Exchange):
     async def unsubscribe_balance(self, sub: BalanceSubscriber):
         self.balance_sudscribers.discard(sub)
     
-    async def get_balance(self) -> dict[COIN_ID, amount]:
+    async def get_balance(self) -> dict[COIN_NAME, AMOUNT]:
         return self.wallet
     
     #Trader
     
-    async def buy(self, coin_id: int, usdt_quantity: float | None = None, usdt_name: str = 'USDT'):
-        if coin_id not in self.coins.inverse:
-            self.logger.warning(f"coin - {coin_id} not support for buy")
+    async def buy(self, coin_name: str, usdt_quantity: float | None = None, usdt_name: str = 'USDT'):
+        # if coin_id not in self.coins.inverse:
+        #     self.logger.warning(f"coin - {coin_id} not support for buy")
             
         if usdt_quantity is None:
-            async with self.__coin_locks[self.coins[usdt_name]]:
-                usdt_quantity = self.wallet[self.coins[usdt_name]]
+            async with self.__coin_locks[usdt_name]:
+                usdt_quantity = self.wallet[usdt_name]
         
-        coin_name: COIN_NAME = self.coins.inverse[coin_id]
+        # coin_name: COIN_NAME = self.coins.inverse[coin_id]
         
-        # self.logger.info(f'Exchange = {self.name}, createMarkerOrder = {self.__ex.has['createMarketOrder']}, createMarketBuyOrderRequiresPrice = {self.__ex.options.get('createMarketBuyOrderRequiresPrice')}')
+        if coin_name == usdt_name:
+            self.logger.warning("Buy usdt/usdt")
+            return None
+        
+        # self.logger.info(f'Exchange = {self.name}, createMarkerOrder = {self.instance.has['createMarketOrder']}, createMarketBuyOrderRequiresPrice = {self.instance.options.get('createMarketBuyOrderRequiresPrice')}')
 
-        if (self.__ex.has['createMarketOrder']):
+        if (self.instance.has['createMarketOrder']):
             symbol = f"{coin_name}/{usdt_name}"
             
             try:
-                order = await self.__ex.create_order(symbol, 'market', 'buy', usdt_quantity)
-                filled_amount = order.get('filled', 0)
-                cost = order.get('cost', 0)
-                self.logger.info(f"Buy order filled: {filled_amount} {coin_name} for {cost} {usdt_name}")
+                order = await self.instance.create_order(symbol, 'market', 'buy', usdt_quantity)
+                filled_amount = order.get('filled')
+                cost = order.get('cost')
+                self.logger.buy(symbol, cost or "", filled_amount or "")
                 return order
             except Exception as e:
                 self.logger.error(f"Buy order failed for {symbol}: {e}")
                 return None
             
         else:
-            self.logger.warning(f"Market sell is not supported on exchange {self.__ex.id}")
+            self.logger.warning(f"Market sell is not supported on exchange {self.instance.id}")
     
-    async def sell(self, coin_id: int, quantity: float | None = None, usdt_name: str = 'USDT'):
-        if coin_id not in self.coins.inverse:
-            self.logger.warning(f"coin - {coin_id} not support for sell")
-        
-        coin_name: COIN_NAME = self.coins.inverse[coin_id]
-        
+    async def sell(self, coin_name: str, quantity: float | None = None, usdt_name: str = 'USDT'):
         if coin_name == usdt_name:
+            self.logger.warning("Sell usdt/usdt")
             return None
         
         if quantity is None:
-            async with self.__coin_locks[coin_id]:
-                quantity = self.wallet[coin_id]
+            async with self.__coin_locks[coin_name]:
+                quantity = self.wallet[coin_name]
         
-        # self.logger.info(f'Exchange = {self.name}, createMarkerOrder = {self.__ex.has['createMarketOrder']}, createMarketBuyOrderRequiresPrice = {self.__ex.options.get('createMarketBuyOrderRequiresPrice')}')
+        # self.logger.info(f'Exchange = {self.name}, createMarkerOrder = {self.instance.has['createMarketOrder']}, createMarketBuyOrderRequiresPrice = {self.instance.options.get('createMarketBuyOrderRequiresPrice')}')
         
         # Можно ли торговать по рыночной цене
-        if (self.__ex.has['createMarketOrder']):                                 
+        if (self.instance.has['createMarketOrder']):                                 
             symbol = f"{coin_name}/{usdt_name}"
             try:
-                order = await self.__ex.create_order(symbol, 'market', 'sell', quantity)
-                filled_amount = order.get('filled', 0)
+                order = await self.instance.create_order(symbol, 'market', 'sell', quantity)
+                filled_amount = order.get('filled')
                 cost = order.get('cost', 0)
-                self.logger.info(f"Sell order filled: {filled_amount} {coin_name} for {cost} {usdt_name}")
+                self.logger.sell(symbol, cost or "", filled_amount or "")
                 return order
             except Exception as e:
                 self.logger.error(f"Sell order failed for {symbol}: {e}")
                 return None
         else:
-            self.logger.warning(f"Market sell is not supported on exchange {self.__ex.id}")
+            self.logger.warning(f"Market sell is not supported on exchange {self.name}")
     
-    # Courier
-    async def get_deposit_address(self, coin_name: str, chain: str) -> str | None:        
-        try:            
-            params = {
-                'network': chain,
-                'chain': chain
-            }
-            
-            # address_info_total = await self.__ex.fetchDepositAddressesByNetwork(coin_name) #type: ignore
-            #self.logger.critical(f'INFO: {address_info_total}')
-            # from pprint import pprint 
-            # pprint(address_info_total)
-            
-            address_info = await self.__ex.fetch_deposit_address(coin_name, params)
-            
-            address = None           
-            
-            if isinstance(address_info, dict):
-                self.logger.info(f'TAGS: {address_info}')
-                address = address_info.get('address')
-                if not address and 'addresses' in address_info:
-                    address = address_info['addresses'][0].get('address') if address_info['addresses'] else None
-            else:
-                address = str(address_info)
+    async def get_deposit_address(self, coin_address: str) -> str | None:
+        if coin := self.get_coin(coin_address):
+            try:       
+                address_info = await self.instance.fetch_deposit_address(*self._get_deposit_address_params(coin))
                 
-            if not address:
-                raise ValueError(f"Адрес не найден в ответе от биржи для {coin_name}")
+                address = None       
                 
-            return address
+                if isinstance(address_info, dict):
+                    self.logger.info(f'TAGS: {address_info}')
+                    address = address_info.get('address')
+                    if not address and 'addresses' in address_info:
+                        address = address_info['addresses'][0].get('address') if address_info['addresses'] else None
+                else:
+                    address = str(address_info)
+                    
+                if not address:
+                    raise ValueError(f"Адрес не найден в ответе от биржи для {coin.name}")
+                    
+                return address
+            
+            except ccxtpro.BadRequest as e:
+                error_msg = f"Сеть {coin.network} не поддерживается для {coin.name}"
+                self.logger.error(f"{error_msg}: {e}")
+                
+            except ccxtpro.BaseError as e:
+                self.logger.error(f"Ошибка биржи при получении адреса {coin.name}: {e}")
+                
+            except Exception as e:
+                self.logger.error(f"Неожиданная ошибка при получении адреса {coin.name}: {e}")
+                
+    
+
         
-        except ccxtpro.BadRequest as e:
-            error_msg = f"Сеть {chain} не поддерживается для {coin_name}"
-            self.logger.error(f"{error_msg}: {e}")
-            return None
-        except ccxtpro.BaseError as e:
-            self.logger.error(f"Ошибка биржи при получении адреса {coin_name}: {e}")
-            return None
-        except Exception as e:
-            self.logger.error(f"Неожиданная ошибка при получении адреса {coin_name}: {e}")
-            return None
     
-    
-    async def withdraw(self, coin_name: str, chain: str, amount: float, ex_destination: DESTINATION , tag: str = '') -> None:                
-        if address := await ex_destination.get_deposit_address(coin_name, chain):        
-            self.logger.info(f'Withdraw deposit address: {address}')
+    async def withdraw(self, coin_address: str, amount: float, ex_destination: DESTINATION , tag: str = '') -> bool:    
+        if coin := self.get_coin(coin_address):
+            if address := await ex_destination.get_deposit_address(coin_address):        
+                self.logger.info(f'Withdraw deposit address: {address}')
+                    
+                params = {
+                    'network': coin.network,
+                    'chain': coin.network
+                }
                 
-            params = {
-                'network': chain,
-                'chain': chain
-            }
-            
-            self.logger.info(f'Withdraw params: {params}')
-            
-            # try:
-            #     withdraw_result = await self.instance.withdraw(coin_name, amount, address, tag=tag, params=params)
-            #     self.logger.info(f'Withdraw Result: {withdraw_result}')
+                self.logger.info(f'Withdraw params: {params}')
                 
-            # except Exception as e:
-            #     self.logger.error(f'Withdraw error: {e}')
-        
-        else:
-            self.logger.error(f'Cannot fetch deposit address on Exchange = {self.name}, Coin = {coin_name}, Chain = {chain}')
+                try:
+                    withdraw_result = await self.instance.withdraw(coin.name, amount, address, tag=tag, params=params)
+                    self.logger.info(f'Withdraw Result: {withdraw_result}')
+                    return True
+                except ccxt.InsufficientFunds as e:
+                    self.logger.error(f'Недостаточно средств для вывода: {e}')
+                    return False
+                except ccxt.InvalidAddress as e:
+                    self.logger.error(f'Неверный адрес вывода: {e}')
+                    return False
+                except ccxt.PermissionDenied as e:
+                    self.logger.error(f'Нет прав на вывод средств: {e}')
+                    return False
+                except ccxt.NetworkError as e:
+                    self.logger.error(f'Сетевая ошибка: {e}')
+                    # Можно попробовать повторить запрос
+                    return False
+                except ccxt.ExchangeError as e:
+                    self.logger.error(f'Ошибка биржи: {e}')
+                    return False
+                except Exception as e:
+                    self.logger.error(f'Неизвестная ошибка при выводе: {e}')
+                    return False
+            
+            else: self.logger.error(f'Cannot fetch deposit address on Exchange = {self.name}, Coin = {coin.name}, Chain = {coin.network}')
+        else: self.logger.warning(f"Coin_address - {coin_address} is not supporting")
+            
+        return False
 
     async def get_current_coins(self) -> dict[COIN_NAME, set[Coin]]:
         # loge NotImplementedError
@@ -344,5 +360,11 @@ class CcxtExchange(Exchange):
     def set_coins_by_mapper(self, coins: bidict[COIN_NAME, COIN_ID]):
         self.coins = coins
         
+    
+    def _get_deposit_address_params(self, coin: Coin) -> tuple[COIN_NAME, dict]:
+        params = {
+            "network": coin.network
+        }
+        return coin.name, params
         
-# if coin_name, chain := mapper.get...
+        

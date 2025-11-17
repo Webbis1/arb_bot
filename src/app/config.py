@@ -5,40 +5,69 @@ import os
 
 load_dotenv()
 
-
-
-def setup_logging():
-    """Настройка логирования один раз при старте приложения"""
-    root_logger = logging.getLogger()
+class TradingLogger(logging.Logger):
+    """Кастомный логгер для торговых операций"""
     
+    BUY = 24
+    SELL = 25
+    SUCCESS_LEVEL = 35
+    
+    def __init__(self, name):
+        super().__init__(name)
+        
+        logging.addLevelName(self.BUY, "BUY")
+        logging.addLevelName(self.SELL, "SELL")
+        logging.addLevelName(self.SUCCESS_LEVEL, "SUCCESS")
+    
+    def buy(self, symbol, price, quantity, *args, **kwargs):
+        """Логирование покупки с деталями"""
+        message = f"BUY ORDER: {symbol} | Price: {price} | Quantity: {quantity}"
+        if self.isEnabledFor(self.BUY):
+            self._log(self.BUY, message, args, **kwargs)
+    
+    def sell(self, symbol, price, quantity, *args, **kwargs):
+        """Логирование продажи с деталями"""
+        message = f"SELL ORDER: {symbol} | Price: {price} | Quantity: {quantity}"
+        if self.isEnabledFor(self.SELL):
+            self._log(self.SELL, message, args, **kwargs)
+    
+    def success(self, message, *args, **kwargs):
+        """Логирование успешных операций"""
+        if self.isEnabledFor(self.SUCCESS_LEVEL):
+            self._log(self.SUCCESS_LEVEL, message, args, **kwargs)
+
+# Устанавливаем кастомный логгер
+logging.setLoggerClass(TradingLogger)
+
+def setup_trading_logging():
+    root_logger = logging.getLogger()
     root_logger.handlers.clear()
     
-    class ColorFormatter(logging.Formatter):
-        # Более тонкая настройка цветов
-        TIME_COLOR = "\033[38;5;245m"      # Светло-серый
-        NAME_COLOR = "\033[38;5;39m"       # Яркий синий
+    class TradingFormatter(logging.Formatter):
         LEVEL_COLORS = {
-            logging.DEBUG: "\033[38;5;51m",    # Яркий голубой
-            logging.INFO: "\033[38;5;46m",     # Яркий зеленый
-            logging.WARNING: "\033[38;5;226m", # Яркий желтый
-            logging.ERROR: "\033[38;5;196m",   # Яркий красный
-            logging.CRITICAL: "\033[38;5;201m", # Яркий фиолетовый
+            logging.DEBUG: "\033[38;5;51m",
+            logging.INFO: "\033[38;5;46m",
+            TradingLogger.BUY: "\033[38;5;42m",        # Зеленый для BUY
+            TradingLogger.SELL: "\033[38;5;208m",      # Оранжевый для SELL
+            logging.WARNING: "\033[38;5;226m",
+            TradingLogger.SUCCESS_LEVEL: "\033[38;5;82m", # Яркий зеленый для SUCCESS
+            logging.ERROR: "\033[38;5;196m",
+            logging.CRITICAL: "\033[38;5;201m",
         }
-        MESSAGE_COLOR = "\033[97m"         # Ярко-белый
         RESET = "\033[0m"
         
         def format(self, record):
             level_color = self.LEVEL_COLORS.get(record.levelno, self.RESET)
             
-            time_part = f"{self.TIME_COLOR}{self.formatTime(record, self.datefmt)}{self.RESET}"
-            name_part = f"{self.NAME_COLOR}{record.name}{self.RESET}"
+            time_part = f"\033[38;5;245m{self.formatTime(record, self.datefmt)}{self.RESET}"
+            name_part = f"\033[38;5;39m{record.name}{self.RESET}"
             level_part = f"{level_color}{record.levelname}{self.RESET}"
-            message_part = f"{self.MESSAGE_COLOR}{record.getMessage()}{self.RESET}"
+            message_part = f"\033[97m{record.getMessage()}{self.RESET}"
             
             return f"{time_part} - {name_part} - {level_part} - {message_part}"
     
     handler = logging.StreamHandler(sys.stdout)
-    formatter = ColorFormatter(
+    formatter = TradingFormatter(
         fmt='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         datefmt='%Y-%m-%d %H:%M:%S'
     )
@@ -47,7 +76,7 @@ def setup_logging():
     root_logger.addHandler(handler)
     root_logger.setLevel(logging.INFO)
     
-setup_logging()
+setup_trading_logging()
 
 
 

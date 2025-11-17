@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from core.models import Coin
 from core.interfaces import Exchange
 
-from core.models.types import COIN_ID, COIN_NAME, amount
+from core.models.types import COIN_ID, COIN_NAME, AMOUNT
 
 @dataclass
 class Deal:
