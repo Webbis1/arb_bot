@@ -20,6 +20,10 @@ class Exchange:
     
     
     @property
+    def usdt(self) -> str:
+        return "USDT"
+    
+    @property
     def connected(self):        
         def decorator(func):
             @functools.wraps(func)

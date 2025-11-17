@@ -1,6 +1,6 @@
 from abc import abstractmethod
 from bidict import bidict
-from typing import Optional, Any
+from typing import Literal, Optional, Any
 
 import ccxt
 from ccxt.pro import Exchange as CcxtProExchange
@@ -12,6 +12,8 @@ from core.models.types import COIN_NAME, AMOUNT, DESTINATION
 
 import asyncio
 import logging
+
+from infrastructure.Exchenges.CcxtExchangeModel import CcxtExchangModel
 
 
 class BalanceExchange(Exchange):
@@ -147,53 +149,7 @@ class PriceExchange(Exchange):
         self.price_subscribers.discard(sub)
 
 
-class TradingExchange(Exchange):
 
-    async def buy(self, exchange_instance: CcxtProExchange, coin_name: str, usdt_quantity: float | None = None, usdt_name: str = 'USDT'):
-        if self.working:
-            if coin_name == usdt_name:
-                self.logger.warning("Buy usdt/usdt")
-                return None
-
-            
-            
-            if not usdt_quantity:
-                usdt_quantity = self.wallet[coin_name]
-                
-            symbol = f"{coin_name}/{usdt_name}"
-            
-            @self.connected
-            async def transaction(exchange: CcxtProExchange, symbol: str, quantity: float):
-                if not exchange_instance.has['createMarketOrder']: #TODO: проверить для всех бирж
-                    self.logger.warning(f"Market buy is not supported on exchange {self.name}")
-                    return None
-                order = await exchange.create_order(symbol, 'market', 'buy', quantity)
-                filled_amount = order.get('filled')
-                cost = order.get('cost')
-                self.logger.info(f"Buy order: {symbol}, cost: {cost or ""}, filled: {filled_amount or ""}")
-                return order
-            
-            return await transaction(exchange_instance, symbol, usdt_quantity)
-
-    async def sell(self, exchange_instance: CcxtProExchange, coin_name: str, quantity: float | None = None, usdt_name: str = 'USDT'):
-        if coin_name == usdt_name:
-            self.logger.warning("Sell usdt/usdt")
-            return None
-
-        if not exchange_instance.has['createMarketOrder']:
-            self.logger.warning(f"Market sell is not supported on exchange {exchange_instance.id}")
-            return None
-
-        symbol = f"{coin_name}/{usdt_name}"
-        try:
-            order = await exchange_instance.create_order(symbol, 'market', 'sell', quantity)
-            filled_amount = order.get('filled')
-            cost = order.get('cost', 0)
-            self.logger.info(f"Sell order: {symbol}, cost: {cost}, filled: {filled_amount}")
-            return order
-        except Exception as e:
-            self.logger.error(f"Sell order failed for {symbol}: {e}")
-            return None
 
 
 class TransferExchange(Exchange):
