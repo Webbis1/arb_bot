@@ -3,6 +3,8 @@ import sys
 from dotenv import load_dotenv
 import os
 
+from core.models.dto.ExchangeParams import ExchangeParams, DEFAULT_PARAMS
+
 load_dotenv()
 
 class TradingLogger(logging.Logger):
@@ -79,36 +81,42 @@ def setup_trading_logging():
 setup_trading_logging()
 
 
+def get_required_env(key: str) -> str:
+    value = os.getenv(key)
+    if value is None:
+        raise ValueError(f"Environment variable {key} is not set")
+    return value
 
-api_keys = {
-    # 'binance': {
-    #     'api_key': os.getenv('BINANCE_API_KEY'),
-    #     'api_secret': os.getenv('BINANCE_API_SECRET'),
-    # },
+api_keys: dict[str, ExchangeParams] = {
     'okx': {
-        'api_key': os.getenv('OKX_API_KEY'),
-        'api_secret': os.getenv('OKX_API_SECRET'),
-        'password': os.getenv('OKX_PASSWORD'),
+        'apiKey': get_required_env('OKX_API_KEY'),
+        'secret': get_required_env('OKX_API_SECRET'),
+        'password': get_required_env('OKX_PASSWORD'),
+        'sandbox': False,
+        'enableRateLimit': True,
     },
     'bitget': {
-        'api_key': os.getenv('BITGET_API_KEY'),
-        'api_secret': os.getenv('BITGET_API_SECRET'),
-        'password': os.getenv('BITGET_PASSWORD'),
+        'apiKey': get_required_env('BITGET_API_KEY'),
+        'secret': get_required_env('BITGET_API_SECRET'),
+        'password': get_required_env('BITGET_PASSWORD'),
+        'sandbox': False,
+        'enableRateLimit': True,
         'options': {
             'createMarketBuyOrderRequiresPrice': False,
         },
     },
     'kucoin': {
-        'api_key': os.getenv('KUCOIN_API_KEY'),
-        'api_secret': os.getenv('KUCOIN_API_SECRET'),
-        'password': os.getenv('KUCOIN_PASSWORD'),
-        # 'urls': {
-        #     'api': 'https://www.kucoin.com'
-        # }
+        'apiKey': get_required_env('KUCOIN_API_KEY'),
+        'secret': get_required_env('KUCOIN_API_SECRET'),
+        'password': get_required_env('KUCOIN_PASSWORD'),
+        'sandbox': False,
+        'enableRateLimit': True,
     },
     'htx': {
-        'api_key': os.getenv('HTX_API_KEY'),
-        'api_secret': os.getenv('HTX_API_SECRET'),
+        'apiKey': get_required_env('HTX_API_KEY'),
+        'secret': get_required_env('HTX_API_SECRET'),
+        'sandbox': False,
+        'enableRateLimit': True,
         'options': {
             'createMarketBuyOrderRequiresPrice': False,
         },

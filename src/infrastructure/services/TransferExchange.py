@@ -1,7 +1,7 @@
 import ccxt
 from core.models.Coins import Coin
 from core.models.types import COIN_NAME
-from infrastructure.Exchenges.CcxtExchangeModel import CcxtExchangModel
+from infrastructure.CcxtExchangeModel import CcxtExchangModel
 from ccxt.pro import Exchange as CcxtProExchange
 import ccxt.pro as ccxtpro
 

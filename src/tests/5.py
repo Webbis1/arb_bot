@@ -1,94 +1,66 @@
-
 import asyncio
-from contextlib import AsyncExitStack, asynccontextmanager
+from contextlib import asynccontextmanager
 import functools
+from typing import Any, Callable, Awaitable, TypeVar
 
+F = TypeVar('F', bound=Callable[..., Any])
 
-import asyncio
-import functools
-
-class Test:
+class Cex:
     def __init__(self) -> None:
+        self.name = "fff"
         self._is_running = asyncio.Event()
-        # Устанавливаем событие, чтобы код работал
-        # self._is_running.set()
+        self._is_running.set()
+    
+    def working(self, func: F) -> F:
+        @functools.wraps(func)
+        async def wrapper(*args: Any, **kwargs: Any) -> Any:
+            # Первый аргумент - self экземпляра
+            self_instance = args[0]
+            if self_instance._is_running.is_set():
+                return await func(*args, **kwargs)
+            else:
+                return "lox"
+        return wrapper  # type: ignore
+    
+    @working
+    async def buy(self) -> str:
+        return f"Buy executed for {self.name}"
+    
+    
+    
+
+
+class Instance:
+    def __init__(self) -> None:
+        self.ins = "conn"
+        self.working = True
+        
+    async def recon(self):
+        await asyncio.sleep(5)
+        self.working = True
     
     
     @property
-    def working(self):
-        def decorator(func):
-            @functools.wraps(func)
-            async def wrapper(*args, **kwargs):
-                if self._is_running.is_set():
-                    return await func("qqq", *args, **kwargs)
-                else:
-                    return "lox"        
-            return wrapper
-        return decorator
-    
-
-    async def test(self):
-        print("start")
-        @self.working
-        async def ttt():
-            return "Working"
+    @asynccontextmanager
+    async def conn(self):
+        if not self.working: yield None
+        
+        
+        try:
+            yield self.ins
+        
+        except Exception as e:
+            print(e)
+            self.working = False
+            asyncio.create_task(self.recon())
+        
+        finally:
+            print("pidor")
             
-        print(await ttt())
+async def test():
+    ins = Instance()
+    async with ins.conn as conn:
+        if not conn: return
         
-        self._is_running.set()
-        print(await ttt())
-        return "done"
-
-obj = Test()
-# Использование
-
-@obj.working
-async def main(aaa = "IIII"):
-    # result = await obj.test()
-    print(aaa)
-
-asyncio.run(main())
-
-obj._is_running.set()
-
-asyncio.run(main())
-
-# @asynccontextmanager
-# async def async_context1():+
-#     try:
-#         yield "1"
-#     except Exception as e:
-#         print(f" 1 - ex - {e}")
-#     finally:
-#         print(" end 1")
+        print("work imitation")
         
-# @asynccontextmanager
-# async def async_context2():
-#     try:
-#         yield "2"
-#     except Exception as e:
-#         print(f" 2 - ex - {e}")
-#         raise e
-#     finally:
-#         print(" end 2")
-
-
-    
-# async def test_multiple_contexts():
-#     async with async_context1() as ctx1, async_context2() as ctx2:
-#         print(f"{ctx1} ----  {ctx2}")
-#         raise Exception("Test")
-        
-        
-# async def test_exit_stack():
-#     async with AsyncExitStack() as stack:
-#         ctx1 = await stack.enter_async_context(async_context1())
-#         ctx2 = await stack.enter_async_context(async_context2())
-#         print(f"{ctx1} ---- {ctx2}")
-#         raise Exception("Test")
-        
-# if __name__ == "__main__":
-#     # Запуск демонстрации
-#     # asyncio.run(test_exit_stack())
-#     asyncio.run(test_multiple_contexts())
-    

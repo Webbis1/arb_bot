@@ -5,7 +5,7 @@ class TransactionFailed(Exception):
     """Кастомная ошибка, которая ведет себя как None"""
     
     def __init__(self, reason: str | None = None, code: str = "UNKNOWN"):
-        self.reason = reason
+        self.reason = reason or ""
         self.code = code
         self.timestamp = time.time()
         super().__init__(reason)
