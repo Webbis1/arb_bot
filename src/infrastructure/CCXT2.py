@@ -14,7 +14,7 @@ import asyncio
 import logging
 
 from infrastructure.CcxtExchangeModel import CcxtExchangModel
-from infrastructure.ErrorHandlerServices.ConnectionErrorHandler import ConnectionErrorHandler
+from infrastructure.ErrorHandlerServices.Connection import Connection
 from infrastructure.services.BalanceExchange import BalanceExchange
 from infrastructure.services.PriceExchange import PriceExchange
 from infrastructure.services.TradingExchange import TradingExchange
@@ -25,9 +25,8 @@ from infrastructure.services.TransferExchange import TransferExchange
 
 
 class CcxtExchange(BalanceExchange, PriceExchange, TradingExchange, TransferExchange):
-    def __init__(self, name: str, instance: ConnectionErrorHandler):
-        Exchange.__init__(self, name)
-        self.__ex: CcxtProExchange = instance
+    def __init__(self, name: str, instance: Connection):
+        self.__ex: Connection = instance
         self._is_running = False
         self.logger = logging.getLogger(f'CcxtExchange.{name}')
         self.__coin_locks: dict[COIN_NAME, asyncio.Lock] = {}

@@ -10,6 +10,9 @@ PRICE: TypeAlias = float
 FEE: TypeAlias = float
 CHAIN: TypeAlias = str
 
+
+RESUME_TIME: TypeAlias = float
+
 BALANCE: TypeAlias = float
 
 AMOUNT: TypeAlias = float

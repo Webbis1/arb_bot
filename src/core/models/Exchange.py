@@ -12,7 +12,7 @@ from core.models.types import ADDRESS, CHAIN, COIN_ID, COIN_NAME, FEE, AMOUNT
 class Exchange:
     def __init__(self, name: str):
         self.name: str = name
-        self._is_running = asyncio.Event()
+        self.__disabled = asyncio.Event()
         # self.coins: bidict[COIN_NAME, COIN_ID] = bidict()
         self._address_map: dict[ADDRESS, Coin] = {}
         self.wallet: dict[COIN_NAME, AMOUNT] = {}
@@ -23,11 +23,23 @@ class Exchange:
     def usdt(self) -> str:
         return "USDT"
     
+    
+    def symbol(self, coin_name: str) -> str:
+        return f"{coin_name.upper()}/{self.usdt}"
    
     @property
     def working(self) -> bool:
-        return self._is_running.is_set()
+        return not self.__disabled.is_set()
 
+
+    async def pause(self, seconds: float = 60):
+        self.__disabled.set()
+        self.logger.info(f"A {seconds}-second pause was taken")
+        await asyncio.sleep(seconds)
+        self.__disabled.clear()
+    
+    async def stop(self):
+        self.__disabled.set()
     
     def __hash__(self) -> int:
         return hash(self.name)

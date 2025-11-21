@@ -4,8 +4,9 @@ import time
 class TransactionFailed(Exception):
     """Кастомная ошибка, которая ведет себя как None"""
     
-    def __init__(self, reason: str | None = None, code: str = "UNKNOWN"):
+    def __init__(self, ex_name: str, reason: str | None = None, code: str = "UNKNOWN"):
         self.reason = reason or ""
+        self.ex_name = ex_name
         self.code = code
         self.timestamp = time.time()
         super().__init__(reason)

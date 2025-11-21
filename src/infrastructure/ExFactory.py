@@ -11,7 +11,7 @@ from core.models.dto.ExchangeParams import ExchangeParams
 from core.models.types import EXCHANGE_NAME
 # from infrastructure.CcxtExchange import CcxtExchange
 from infrastructure.CCXT2 import CcxtExchange
-from infrastructure.ErrorHandlerServices.ConnectionErrorHandler import ConnectionErrorHandler
+from infrastructure.ErrorHandlerServices.Connection import Connection
 # from infrastructure.Exchenges.base_ccxt_exchange import CcxtExchange # Импортируем базовый класс
 
 # logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -83,7 +83,7 @@ class ExFactory(ExFactoryInterface):
     def __getitem__(self, ex_name: str) -> CcxtExchange | None:
         if ex_name not in self._exchanges:
             if params := self._config.get(ex_name):
-                inst = ConnectionErrorHandler(ex_name, params)
+                inst = Connection(ex_name, params)
                 self._exchanges[ex_name] = CcxtExchange(ex_name, inst)
         
         return self._exchanges.get(ex_name)
