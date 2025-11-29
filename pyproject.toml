@@ -1,0 +1,26 @@
+[tool.poetry]
+name = "arb-bot" # Имя проекта, как он будет называться в PyPI и т.д.
+version = "0.1.0"
+description = ""
+authors = ["ar1ess <webbis@internet.ru>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+ccxt = "^4.5.14"
+sortedcollections = "^2.1.0"
+python-dotenv = "^1.2.1"
+bidict = "^0.23.1"
+frozendict = "^2.4.6"
+
+# [tool.poetry.packages]
+poetry = "^2.2.1"
+zope = "^5.13"
+rich = "^14.2.0"
+[[tool.poetry.packages]]
+include = "src"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

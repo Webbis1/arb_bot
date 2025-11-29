@@ -1,0 +1,17 @@
+.env
+
+.vscode
+
+.pytest_cache 
+
+*/__pycache__
+
+/tests
+
+/temp
+
+# /src/tests
+
+# /sanyokTests
+
+# /docs
